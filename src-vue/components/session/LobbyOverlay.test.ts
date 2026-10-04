@@ -45,11 +45,25 @@ describe('LobbyOverlay', () => {
   it('shows waiting message when lobby blocks guest', async () => {
     const features = useSessionFeaturesStore();
     const conference = useConferenceStore();
+    const local = useLocalStore();
     conference.setDisplayName('Guest');
     features.lobbyEnabled = true;
     features.localLobbyPending = true;
     const { wrapper } = await mountWithApp(LobbyOverlay);
     expect(wrapper.text()).toContain('Asking to join...');
+
+    // Test device preview buttons
+    const deviceBtns = wrapper.findAll('.deviceBtn');
+    expect(deviceBtns.length).toBe(2);
+    expect(deviceBtns[0].text()).toContain('Mic On');
+    expect(deviceBtns[1].text()).toContain('Camera On');
+
+    await deviceBtns[0].trigger('click');
+    expect(local.mute).toBe(true);
+
+    await deviceBtns[1].trigger('click');
+    expect(local.cameraOff).toBe(true);
+
     wrapper.unmount();
   });
 
@@ -296,5 +310,29 @@ describe('LobbyOverlay', () => {
     expect(routerSpy).toHaveBeenCalledWith('/');
 
     wrapper.unmount();
+  });
+
+  it('posts message to parent window on exit when inside an iframe', async () => {
+    const features = useSessionFeaturesStore();
+    features.lobbyEnabled = true;
+    features.localLobbyPending = true;
+
+    const postMessageSpy = vi.fn();
+    const parentMock = { postMessage: postMessageSpy };
+    const originalParent = window.parent;
+    Object.defineProperty(window, 'parent', { value: parentMock, writable: true, configurable: true });
+
+    try {
+      const { wrapper } = await mountWithApp(LobbyOverlay);
+      await wrapper.find('.btnCancel').trigger('click');
+      await flushPromises();
+      expect(postMessageSpy).toHaveBeenCalledWith(
+        { source: 'loungemesh', action: 'leave', event: 'hangup', type: 'hangup' },
+        '*'
+      );
+      wrapper.unmount();
+    } finally {
+      Object.defineProperty(window, 'parent', { value: originalParent, writable: true, configurable: true });
+    }
   });
 });
