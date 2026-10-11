@@ -339,23 +339,39 @@ export class JitsiAdapter implements MediaService {
       return this.jsMeet!.createLocalTracks({
         devices: ['desktop'],
         desktopSharingSources: ['screen', 'window', 'tab'],
+        desktopSharingFrameRate: { min: 15, max: 30 },
+        constraints: {
+          video: {
+            height: { ideal: 720, max: 720 },
+            width: { ideal: 1280, max: 1280 },
+            frameRate: { ideal: 24, max: 30 },
+          },
+        },
         ...options,
       } as any);
     }
     const av = devices.filter((d): d is 'audio' | 'video' => d === 'audio' || d === 'video');
     const trackOptions: any = {
       devices: av.length ? av : ['video'],
+      resolution: 360,
       ...options,
     };
+    const constraints: Record<string, unknown> = {};
     if (devices.includes('audio')) {
-      trackOptions.constraints = {
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
+      constraints.audio = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
       };
     }
+    if (av.includes('video') || !av.length) {
+      constraints.video = {
+        height: { ideal: 360, max: 480 },
+        width: { ideal: 480, max: 640 },
+        frameRate: { ideal: 24, max: 30 },
+      };
+    }
+    trackOptions.constraints = constraints;
     return this.jsMeet!.createLocalTracks(trackOptions);
   }
 

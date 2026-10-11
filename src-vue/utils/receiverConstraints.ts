@@ -11,14 +11,12 @@ export function buildReceiverConstraints(opts: {
   const remoteUserIds = opts.remoteUserIds.filter((id) => id && id !== opts.localId);
   if (!remoteUserIds.length) return null;
 
-  const visible = [...new Set(opts.visibleUserIds)];
-  const stage = [...new Set(opts.stageIds)];
+  const visible = [...new Set(opts.visibleUserIds)].filter((id) => id && id !== opts.localId);
+  const stage = [...new Set(opts.stageIds)].filter((id) => id && id !== opts.localId);
   let selectedEndpoints = [...new Set([...visible, ...stage])];
 
   if (!selectedEndpoints.length) {
-    selectedEndpoints = [...remoteUserIds];
-  } else {
-    selectedEndpoints = [...new Set([...selectedEndpoints, ...remoteUserIds])];
+    selectedEndpoints = remoteUserIds.slice(0, 4);
   }
   const selectedSources = selectedEndpoints.map((id) => `${id}-v0`);
 

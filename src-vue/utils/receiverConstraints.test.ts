@@ -14,7 +14,7 @@ describe('buildReceiverConstraints', () => {
     ).toBeNull();
   });
 
-  it('subscribes to all remotes when none are visible yet', () => {
+  it('subscribes to initial remotes when none are visible yet', () => {
     const constraints = buildReceiverConstraints({
       localId: 'me',
       remoteUserIds: ['a', 'b'],
@@ -23,6 +23,18 @@ describe('buildReceiverConstraints', () => {
     });
     expect(constraints?.selectedSources).toEqual(expect.arrayContaining(['a-v0', 'b-v0']));
     expect(constraints?.lastN).toBeGreaterThanOrEqual(1);
+  });
+
+  it('only subscribes to visible and on-stage users, excluding off-screen remotes', () => {
+    const constraints = buildReceiverConstraints({
+      localId: 'me',
+      remoteUserIds: ['a', 'b', 'c', 'd', 'e'],
+      visibleUserIds: ['a'],
+      stageIds: ['b'],
+    });
+    expect(constraints?.selectedSources).toEqual(['a-v0', 'b-v0']);
+    expect(constraints?.constraints['c-v0']).toBeUndefined();
+    expect(constraints?.constraints['d-v0']).toBeUndefined();
   });
 
   it('uses source IDs for selected and on-stage constraints', () => {

@@ -28,11 +28,13 @@ describe('ScreenshareButton', () => {
     const { wrapper } = await mountWithApp(ScreenshareButton);
     await wrapper.find('button.ibtn').trigger('click');
     await flushPromises();
-    expect(getJitsiTestContext().jsMeet.createLocalTracks).toHaveBeenCalledWith({
-      devices: ['desktop'],
-      desktopSharingSources: ['screen', 'window', 'tab'],
-      firePermissionPromptIsShownEvent: true,
-    });
+    expect(getJitsiTestContext().jsMeet.createLocalTracks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        devices: ['desktop'],
+        desktopSharingSources: ['screen', 'window', 'tab'],
+        firePermissionPromptIsShownEvent: true,
+      }),
+    );
     expect(addSpy).toHaveBeenCalled();
     expect(local.screenshare).toBeTruthy();
     wrapper.unmount();
