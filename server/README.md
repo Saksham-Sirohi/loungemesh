@@ -143,3 +143,15 @@ DATABASE_URL="postgresql://loungemesh:loungemesh@postgres:5432/loungemesh?schema
 | `GET` / `PUT` / `DELETE` | `/api/meetings/state/:roomName/background` | Get, set, or clear room floorplan background URL. |
 | `POST` | `/api/meetings/log/:roomName` | Record an audit log event in `SessionLog`. |
 
+---
+
+## Pre-Commit & Pre-PR Quality Gates
+
+Whenever modifying backend controllers, services, database schemas, or API endpoints:
+1. **TypeScript Build**: Run `npm --prefix server run build` to verify zero compiler errors.
+2. **Vitest Coverage & E2E Verification**: Frontend and full-stack integration must pass `npm test` (with 100% statement, branch, function, and line coverage) and `npm run test:e2e`.
+3. **Documentation & Skills Updates**:
+   - Update `server/README.md` (endpoint tables and configuration).
+   - Update root `README.md` and `docs-site/` guides if endpoints or user flows change.
+   - Update `.agents/skills/` (specifically `loungemesh-architecture`, `loungemesh-security`, and `loungemesh-features-and-testing`) to keep AI models synchronized with any modified user flows and API contracts.
+

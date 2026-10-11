@@ -97,13 +97,43 @@ npm --prefix server run dev    # Backend Express API server (port 5000)
 
 Production server provisioning uses `./scripts/loungemesh.sh bootstrap` — see [Deployment Guide](docs-site/guide/deployment.md).
 
----
+## Contributor & AI Agent Workflow (Pre-PR & Commit Requirements)
 
-## AI Agent & Automation Guidelines
+> [!IMPORTANT]
+> **Mandatory Quality Gates Before Committing or Submitting a Pull Request:**
+> 1. **All READMEs & AI Skills Must Be Updated**: Whenever introducing or modifying user flows, features, or architectural components, **all README files** ([`README.md`](README.md), [`server/README.md`](server/README.md)) and **all AI skills** in [`.agents/skills/`](.agents/skills/) **MUST be updated** to reflect the newer user flows, API contracts, and testing instructions.
+> 2. **Vitest 100% Code Coverage**: Run `npm test` — all test files must pass with strict 100% statement, branch, function, and line coverage.
+> 3. **E2E Integration Testing**: Run `npm run build && npm run test:e2e` — all Playwright end-to-end integration tests must pass cleanly.
+> 4. **Typechecks & Server Builds**: `npm run typecheck` and `npm --prefix server run build` must compile with zero errors.
 
-This repository provides standardized agent skills and guidelines in:
-- [`AGENTS.md`](AGENTS.md): Repository coding rules, security boundaries, and testing requirements.
-- [`.agents/skills/`](.agents/skills/): Domain skills for architecture, scaling, security, deployment, and testing.
+### 1. Mandatory Pre-Commit & Pre-PR Testing
+- **Vitest Unit Test Suite & Coverage**:
+  ```bash
+  npm test
+  ```
+  Must pass across all test files with **100% statement, branch, function, and line coverage** enforced by `@vitest/coverage-v8`.
+- **E2E Integration Tests**:
+  ```bash
+  npm run build && npm run test:e2e
+  ```
+  Playwright smoke and integration tests must pass cleanly.
+- **TypeScript & Server Checks**:
+  ```bash
+  npm run typecheck
+  npm --prefix server run build
+  ```
+  Zero TypeScript compiler errors in both frontend (`vue-tsc`) and backend (`tsc`).
+- **Documentation Build**:
+  ```bash
+  npm run docs:build
+  ```
+  VitePress documentation and TypeDoc API references must compile with zero broken links or markdown errors.
+
+### 2. Documentation & Agent Skills Maintenance
+Whenever introducing or modifying user flows, features, or architectural components:
+- **Update All READMEs**: Update the root [`README.md`](README.md), [`server/README.md`](server/README.md), and relevant guides in [`docs-site/`](docs-site/) (e.g., [`features.md`](docs-site/guide/features.md), [`scaling.md`](docs-site/guide/scaling.md), [`architecture.md`](docs-site/architecture.md)) with the newer user flows, API payloads, or config flags.
+- **Update All AI Agent Skills**: Update the corresponding skill definition in [`.agents/skills/`](.agents/skills/) (e.g., `loungemesh-features-and-testing`, `loungemesh-architecture`, `loungemesh-eventyay-integration`, etc.) so all AI models (Antigravity, Gemini, Claude, Cursor, Copilot) remain aligned on the newest user flows, contracts, and security patterns.
+- **Keep Agent Rules Synchronized**: Ensure [`AGENTS.md`](AGENTS.md), [`GEMINI.md`](GEMINI.md), [`CLAUDE.md`](CLAUDE.md), [`.cursorrules`](.cursorrules), and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) reflect any updated development directives.
 
 ---
 

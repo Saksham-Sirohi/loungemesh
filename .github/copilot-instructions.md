@@ -19,10 +19,16 @@ You are an expert pair programmer working on LoungeMesh. Follow these repository
 - Derive `meetingExists` directly from `data.role.hostId` (`this.meetingExists = !!data.role.hostId`).
 - Encrypt third-party integration secrets with AES-256-GCM.
 
-## Testing & Quality
+## Testing & Quality (Pre-PR Gates)
 - Strict 100% test coverage requirement across `src-vue/` (`npm test`).
-- Server TypeScript compilation must pass cleanly (`npm --prefix server run build`).
+- Playwright E2E integration test suite must pass (`npm run build && npm run test:e2e`).
+- Frontend typecheck (`npm run typecheck`) and server TypeScript compilation (`npm --prefix server run build`).
 - Documentation build must pass cleanly (`npm run docs:build`).
+
+## Documentation & AI Skills Maintenance
+- Whenever introducing or modifying user flows, features, or architectural components:
+  - Update all READMEs (`README.md`, `server/README.md`) and guides in `docs-site/`.
+  - Update relevant domain skills in `.agents/skills/` so all AI assistants and contributors stay aligned on the newest user flows and contracts.
 
 ## Domain Skills
 Detailed skills are located in `.agents/skills/`:

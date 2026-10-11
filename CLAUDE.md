@@ -25,8 +25,15 @@
 - **Meeting Existence**: In `sessionFeaturesStore.ts`, derive `meetingExists` directly from `data.role.hostId` (`this.meetingExists = !!data.role.hostId`).
 - **Secret Encryption**: Encrypt third-party integration secrets (e.g. Google Calendar OAuth tokens) with AES-256-GCM using `ENCRYPTION_KEY`.
 
-## Testing Requirements
+## Testing Requirements & Pre-PR Verification
 - **100% Coverage**: All code in `src-vue/` requires 100% statement, branch, function, and line coverage. Always verify with `npm test`.
+- **E2E Testing**: Run `npm run build && npm run test:e2e` to verify Playwright integration tests pass cleanly.
+- **Typechecks & Build**: `npm run typecheck` and `npm --prefix server run build` must compile without errors.
+
+## Documentation & AI Skills Maintenance
+- Whenever introducing or modifying user flows, features, or architectural components:
+  - Update all READMEs (`README.md`, `server/README.md`) and guides in `docs-site/`.
+  - Update relevant domain skills in `.agents/skills/` so all AI assistants and contributors stay aligned on the newest user flows and contracts.
 
 ## Specialized Skills
 Consult domain skills in `.agents/skills/`:
