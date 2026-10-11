@@ -56,12 +56,19 @@ Welcome to the LoungeMesh codebase. All AI assistants, autonomous agents, and pa
 1. **100% Test Coverage Requirement**:
    - All code in `src-vue/` is subject to strict **100% statement, branch, and function coverage** thresholds.
    - Any modification or addition to Vue components, stores, composables, or utilities **MUST** be verified by running `npm test`.
-2. **Server Compilation**:
+2. **Server Compilation & Typecheck**:
    - Any backend TypeScript changes **MUST** compile cleanly without errors via `npm --prefix server run build`.
-3. **Documentation Verification**:
-   - Any documentation updates **MUST** compile cleanly via `npm run docs:build`.
-4. **Deployment Automation**:
-   - All deployment script enhancements to `scripts/loungemesh.sh` must include finite timeout guards (e.g., `wait_for_prosody_config` 90s deadline) and reload checks. Never add infinite loops.
+   - Frontend components must pass `npm run typecheck` (`vue-tsc --noEmit`).
+3. **Documentation & Skill Maintenance**:
+   - Whenever introducing or modifying user flows, features, or architectural components:
+     - Update all documentation: root `README.md`, `server/README.md`, and relevant guides in `docs-site/`.
+     - Update the corresponding domain skills in `.agents/skills/` (e.g. `loungemesh-features-and-testing`, `loungemesh-architecture`, `loungemesh-eventyay-integration`, etc.) so all AI models stay informed of new contracts and user flows.
+4. **Mandatory Pre-PR / Pre-Commit Verification Checklist**:
+   - Vitest unit tests with **100% statement, branch, and function coverage** (`npm test`).
+   - E2E Playwright integration tests (`npm run build && npm run test:e2e`).
+   - Frontend typecheck (`npm run typecheck`).
+   - Server TypeScript build (`npm --prefix server run build`).
+   - Docs compilation (`npm run docs:build`).
 
 ---
 
