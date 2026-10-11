@@ -637,7 +637,7 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
         }).catch((err) => console.error('Failed to update enabled features:', err));
       }
       /* v8 ignore stop */
-      if (engine) {
+      if (engine && this.isHost) {
         engine.sendCommand('config', JSON.stringify({ enabledFeatures: this.enabledFeatures }));
       }
     },

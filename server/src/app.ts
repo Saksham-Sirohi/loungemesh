@@ -95,6 +95,11 @@ app.use(parseAccessSession);
 // Apply rate limiting to all API endpoints
 app.use('/api', apiLimiter);
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // Register routes
 app.use('/oauth', oauthRoutes);
 app.use('/api/integration', integrationRoutes);

@@ -46,12 +46,14 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
   switch (name) {
     case 'hello': {
       const data = parse<{ id?: string; userKey?: string; pos?: { x: number; y: number }; name?: string }>(payload);
-      if (!data?.id || data.id === local.id) break;
+      if (!data?.id || data.id === local.id || (senderId && data.id !== senderId)) break;
       if (data.userKey) {
         conference.dedupeUserByKey(data.id, data.userKey);
       }
       if (!conference.users[data.id]) {
         conference.addUser(data.id, { _displayName: data.name }, data.userKey);
+      } else if (data.userKey) {
+        conference.users[data.id].userKey = data.userKey;
       }
       if (data.pos) {
         conference.updateUserPosition(data.id, data.pos);
@@ -282,6 +284,7 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
         enabledFeatures?: Partial<Record<import('@/utils/featureAccess').GatedFeatureKey, boolean>>;
       }>(payload);
       if (data) {
+        if (senderId && features.hostId && senderId !== features.hostId) break;
         features.applyConfigUpdate(data);
       }
       break;

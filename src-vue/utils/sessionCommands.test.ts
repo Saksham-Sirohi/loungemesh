@@ -742,8 +742,25 @@ describe('handleSessionCommand', () => {
     expect(features.lobbyEnabled).toBe(false);
     expect(features.stagePromotionEnabled).toBe(true);
 
-    handleSessionCommand('config', { value: 'not-json' });
+    // Rejects config updates from non-host senders when hostId is known
+    features.hostId = 'host_user_1';
+    handleSessionCommand(
+      'config',
+      { value: JSON.stringify({ allowParticipantRecording: true }) },
+      'imposter_user',
+    );
     expect(features.allowParticipantRecording).toBe(false);
+
+    // Accepts config updates from the actual host
+    handleSessionCommand(
+      'config',
+      { value: JSON.stringify({ allowParticipantRecording: true }) },
+      'host_user_1',
+    );
+    expect(features.allowParticipantRecording).toBe(true);
+
+    handleSessionCommand('config', { value: 'not-json' });
+    expect(features.allowParticipantRecording).toBe(true);
   });
 
   it('prevents non-moderators from starting polls or clearing whiteboard', () => {
@@ -869,11 +886,26 @@ describe('handleSessionCommand', () => {
     });
     expect(conference.users['peer_minimal']).toBeDefined();
 
+    // Ignore hello when senderId does not match claimed id
+    handleSessionCommand(
+      'hello',
+      { value: JSON.stringify({ id: 'peer_spoofed', name: 'Spoofed' }) },
+      'actual_sender',
+    );
+    expect(conference.users['peer_spoofed']).toBeUndefined();
+
     // Hello when user already exists in conference.users
     handleSessionCommand('hello', {
-      value: JSON.stringify({ id: 'peer_1', name: 'Peer 1 Updated' }),
+      value: JSON.stringify({ id: 'peer_1', name: 'Peer 1 Updated', userKey: 'uk_peer_1_new' }),
     });
     expect(conference.users['peer_1'].user?._displayName).toBe('Peer 1 Updated');
+    expect(conference.users['peer_1'].userKey).toBe('uk_peer_1_new');
+
+    // Hello when user already exists but without userKey
+    handleSessionCommand('hello', {
+      value: JSON.stringify({ id: 'peer_minimal', name: 'Minimal 2' }),
+    });
+    expect(conference.users['peer_minimal'].user?._displayName).toBe('Minimal 2');
 
     // hello_req from self or empty is ignored
     const cmdSpy = vi.spyOn(getMediaEngineInstance(), 'sendCommand');

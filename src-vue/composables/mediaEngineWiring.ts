@@ -150,7 +150,9 @@ export function wireStoreSync(engine: MediaService): void {
             }),
           );
         }
-        conferenceStore.pruneStaleUsers(45000);
+        const conf = engine.getConference();
+        const liveIds = conf ? conf.getParticipants().map((p) => p.getId()) : [];
+        conferenceStore.pruneStaleUsers(45000, liveIds);
       }, 5000);
     }
   });

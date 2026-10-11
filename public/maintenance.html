@@ -121,7 +121,7 @@
       var statusEl = document.getElementById('status-text');
 
       function checkHealth() {
-        fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
+        fetch('/api/health', { method: 'GET', cache: 'no-store' })
           .then(function(res) {
             if (res.status === 200) {
               if (statusEl) statusEl.textContent = 'Service back online! Reconnecting…';

@@ -74,7 +74,10 @@ function syncSession(isReconnect = false) {
 
 watch(() => route.params.id, () => void syncSession(), { immediate: true });
 
-const onConnected = () => void syncSession();
+const onConnected = () => {
+  const isReconnect = reconnectStore.attempt > 0 || reconnectStore.phase === 'attempting' || reconnectStore.phase === 'waiting';
+  void syncSession(isReconnect);
+};
 const onDisconnected = () => void syncSession();
 engine.on('connected', onConnected);
 engine.on('disconnected', onDisconnected);

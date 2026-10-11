@@ -63,12 +63,25 @@ export function requireCapability(cap: Capability, opts: { standaloneOpen?: bool
       const feature = featureMap[cap];
       if (feature && roomName) {
         try {
+          let enabledFeatures: Record<string, boolean> | undefined;
           const raw = await redisClient.get(`meeting:state:${roomName}:access`);
           if (raw) {
             const access = JSON.parse(raw);
-            if (access?.enabledFeatures && access.enabledFeatures[feature] === false) {
-              return res.status(403).json({ error: 'feature_disabled', feature });
+            enabledFeatures = access?.enabledFeatures;
+          } else {
+            const meetingConfig = await prisma.meeting.findUnique({
+              where: { roomName },
+              select: { configs: true },
+            });
+            if (meetingConfig?.configs?.roomDefaults) {
+              try {
+                const parsed = JSON.parse(meetingConfig.configs.roomDefaults);
+                enabledFeatures = parsed?.enabledFeatures;
+              } catch {}
             }
+          }
+          if (enabledFeatures && enabledFeatures[feature] === false) {
+            return res.status(403).json({ error: 'feature_disabled', feature });
           }
         } catch (e) {
           console.warn('Error reading feature enablement cache:', e);

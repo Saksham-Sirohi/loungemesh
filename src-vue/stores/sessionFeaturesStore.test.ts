@@ -892,11 +892,21 @@ describe('sessionFeaturesStore', () => {
     const conference = useConferenceStore();
     const engine = { sendCommand: vi.fn() };
 
+    features.isVerifiedHost = true;
     features.panel = 'notes';
     await features.setFeatureEnabled('notes', false, engine);
     expect(features.enabledFeatures.notes).toBe(false);
     expect(features.panel).toBe('');
     expect(engine.sendCommand).toHaveBeenCalledWith('config', expect.stringContaining('"notes":false'));
+
+    // Non-host does not broadcast config
+    engine.sendCommand.mockClear();
+    features.isVerifiedHost = false;
+    features.eventyayMeet = true; // ensure isHost returns false
+    await features.setFeatureEnabled('notes', true, engine);
+    expect(engine.sendCommand).not.toHaveBeenCalled();
+    features.eventyayMeet = false;
+    features.isVerifiedHost = true;
 
     // stage disabling clears stage occupant
     local.setMyID('stager');
