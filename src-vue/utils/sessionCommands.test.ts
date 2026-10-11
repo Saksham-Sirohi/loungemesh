@@ -837,4 +837,106 @@ describe('handleSessionCommand', () => {
     handleSessionCommand('poll_req', { value: JSON.stringify({ action: 'cancel' }) });
     handleSessionCommand('poll_req', { value: JSON.stringify({ action: 'other' }) });
   });
+
+  it('handles hello and hello_req presence commands', () => {
+    const local = useLocalStore();
+    const conference = useConferenceStore();
+    local.setMyID('local_me');
+    local.pos = { x: 100, y: 100 };
+    local.userKey = 'uk_local';
+
+    // Ignore missing id or self id
+    handleSessionCommand('hello', { value: JSON.stringify({}) });
+    handleSessionCommand('hello', { value: JSON.stringify({ id: 'local_me' }) });
+    expect(conference.users['local_me']).toBeUndefined();
+
+    // Valid remote hello
+    handleSessionCommand('hello', {
+      value: JSON.stringify({
+        id: 'peer_1',
+        userKey: 'uk_peer_1',
+        pos: { x: 500, y: 500 },
+        name: 'Peer 1',
+      }),
+    });
+    expect(conference.users['peer_1']).toBeDefined();
+    expect(conference.users['peer_1'].pos).toEqual({ x: 500, y: 500 });
+    expect(conference.users['peer_1'].user?._displayName).toBe('Peer 1');
+
+    // Hello with minimal data (no userKey, no pos, no name)
+    handleSessionCommand('hello', {
+      value: JSON.stringify({ id: 'peer_minimal' }),
+    });
+    expect(conference.users['peer_minimal']).toBeDefined();
+
+    // Hello when user already exists in conference.users
+    handleSessionCommand('hello', {
+      value: JSON.stringify({ id: 'peer_1', name: 'Peer 1 Updated' }),
+    });
+    expect(conference.users['peer_1'].user?._displayName).toBe('Peer 1 Updated');
+
+    // hello_req from self or empty is ignored
+    const cmdSpy = vi.spyOn(getMediaEngineInstance(), 'sendCommand');
+    handleSessionCommand('hello_req', { value: JSON.stringify({}) });
+    handleSessionCommand('hello_req', { value: JSON.stringify({ from: 'local_me' }) });
+    expect(cmdSpy).not.toHaveBeenCalled();
+
+    // hello_req when local.id is empty is ignored
+    local.setMyID('');
+    handleSessionCommand('hello_req', { value: JSON.stringify({ from: 'peer_2' }) });
+    expect(cmdSpy).not.toHaveBeenCalled();
+    local.setMyID('local_me');
+
+    // hello_req from remote responds with hello
+    handleSessionCommand('hello_req', { value: JSON.stringify({ from: 'peer_2' }) });
+    expect(cmdSpy).toHaveBeenCalledWith(
+      'hello',
+      expect.stringContaining('"id":"local_me"'),
+    );
+    cmdSpy.mockRestore();
+  });
+
+  it('blocks commands when feature is disabled by host room-wide', () => {
+    const features = useSessionFeaturesStore();
+    features.enabledFeatures = {
+      notes: false,
+      whiteboard: false,
+      poll: false,
+      stage: false,
+      chat: false,
+    };
+
+    handleSessionCommand('chat', {
+      value: JSON.stringify({ action: 'edit', messageId: 'm1', text: 't', editedAt: 1, editorId: 'e1' }),
+    });
+
+    handleSessionCommand('notes', { value: JSON.stringify({ action: 'begin', total: 1 }) });
+    expect(features.sharedNotes).toBe('');
+
+    handleSessionCommand('wb', {
+      value: JSON.stringify({ action: 'stroke', stroke: { id: 's1', color: '#000', width: 2, points: [] } }),
+    });
+    expect(features.whiteboardStrokes).toHaveLength(0);
+
+    handleSessionCommand('poll', {
+      value: JSON.stringify({ action: 'create', poll: { id: 'p1', question: 'Q', options: [] } }),
+    });
+    expect(features.activePoll).toBeNull();
+
+    handleSessionCommand('poll_req', {
+      value: JSON.stringify({ action: 'create', request: { id: 'pr1', question: 'Q', options: [] } }),
+    });
+    expect(features.pendingPollRequests).toHaveLength(0);
+
+    handleSessionCommand('stage', { value: JSON.stringify({ action: 'promote', id: 'u1' }) });
+    expect(features.stageOccupantId).toBe('');
+
+    handleSessionCommand('mod_change', {
+      value: JSON.stringify({ action: 'propose', id: 'mc_wb', type: 'whiteboard', payload: 'stroke' }),
+    });
+    handleSessionCommand('mod_change', {
+      value: JSON.stringify({ action: 'propose', id: 'mc1', type: 'notes', payload: 'text' }),
+    });
+    expect(features.pendingModerationChanges).toHaveLength(0);
+  });
 });

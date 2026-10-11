@@ -27,6 +27,8 @@ export type RemoteUser = {
   properties: Record<string, unknown>;
   /** Plain display-name snapshot — never store a Jitsi participant object. */
   user?: { _displayName?: string };
+  userKey?: string;
+  lastSeen?: number;
 };
 
 export type ChatMessage = {
@@ -78,10 +80,12 @@ export const useConferenceStore = defineStore('conference', {
       this.users = { ...this.users, [id]: { ...user, ...patch } };
       if (bumpEpoch) this.usersEpoch += 1;
     },
-    addUser(id: string, participant?: unknown) {
+    addUser(id: string, participant?: unknown, userKey?: string) {
       const displayName = displayNameFromParticipant(participant);
       if (this.users[id]) {
         if (displayName) this.updateUserDisplayName(id, displayName);
+        if (userKey) this.patchUser(id, { userKey }, false);
+        this.recordUserHeartbeat(id);
         return;
       }
       const local = useLocalStore();
@@ -99,8 +103,54 @@ export const useConferenceStore = defineStore('conference', {
           pos: spreadInitialUserPosition(existing),
           properties: {},
           ...(displayName ? { user: { _displayName: displayName } } : {}),
+          userKey,
+          lastSeen: Date.now(),
         },
       });
+    },
+    dedupeUserByKey(newId: string, userKey: string) {
+      if (!userKey) return;
+      for (const [id, user] of Object.entries(this.users)) {
+        if (id !== newId && user.userKey === userKey) {
+          const next = { ...this.users };
+          delete next[id];
+          this.commitUsers(next);
+          break;
+        }
+      }
+    },
+    recordUserHeartbeat(id: string) {
+      if (this.users[id]) {
+        this.users[id].lastSeen = Date.now();
+      }
+    },
+    reconcileUsers(liveParticipantIds: string[]) {
+      const set = new Set(liveParticipantIds);
+      let changed = false;
+      const next = { ...this.users };
+      for (const id of Object.keys(this.users)) {
+        if (!set.has(id)) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.commitUsers(next);
+      }
+    },
+    pruneStaleUsers(timeoutMs = 45000) {
+      const now = Date.now();
+      let changed = false;
+      const next = { ...this.users };
+      for (const [id, user] of Object.entries(this.users)) {
+        if (user.lastSeen && now - user.lastSeen > timeoutMs) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.commitUsers(next);
+      }
     },
     setUserTrack(id: string, kind: 'audio' | 'video' | 'screenshareAudio', track: JitsiTrack) {
       if (!this.users[id]) {

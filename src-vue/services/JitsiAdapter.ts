@@ -305,6 +305,8 @@ export class JitsiAdapter implements MediaService {
       'chat',
       'stage',
       'config',
+      'hello',
+      'hello_req',
     ] as const;
     for (const cmd of sessionCommands) {
       conference.addCommandListener(cmd, (payload: { value: string }, senderId: string) => {

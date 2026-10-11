@@ -30,12 +30,9 @@ function parse<T>(payload: CommandPayload): T | null {
 
 /* v8 ignore start */
 function isSenderModeratorOrHost(senderId: string | undefined, features: ReturnType<typeof useSessionFeaturesStore>): boolean {
-  if (!senderId) return true;
+  if (!senderId) return false;
   if (features.hostId === senderId) return true;
   if (features.userGrants[senderId]?.moderator) return true;
-  const conference = useConferenceStore();
-  const user = conference.users[senderId];
-  if (user?.properties?.role === 'moderator' || user?.properties?.role === 'owner') return true;
   return false;
 }
 /* v8 ignore stop */
@@ -47,6 +44,41 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
   const local = useLocalStore();
 
   switch (name) {
+    case 'hello': {
+      const data = parse<{ id?: string; userKey?: string; pos?: { x: number; y: number }; name?: string }>(payload);
+      if (!data?.id || data.id === local.id) break;
+      if (data.userKey) {
+        conference.dedupeUserByKey(data.id, data.userKey);
+      }
+      if (!conference.users[data.id]) {
+        conference.addUser(data.id, { _displayName: data.name }, data.userKey);
+      }
+      if (data.pos) {
+        conference.updateUserPosition(data.id, data.pos);
+      }
+      if (data.name) {
+        conference.updateUserDisplayName(data.id, data.name);
+      }
+      conference.recordUserHeartbeat(data.id);
+      break;
+    }
+    case 'hello_req': {
+      const data = parse<{ from?: string }>(payload);
+      if (!data?.from || data.from === local.id) break;
+      const engine = getMediaEngineInstance();
+      if (engine && local.id) {
+        engine.sendCommand(
+          'hello',
+          JSON.stringify({
+            id: local.id,
+            userKey: local.userKey,
+            pos: local.pos,
+            name: conference.displayName,
+          }),
+        );
+      }
+      break;
+    }
     case 'pos': {
       const pos = parse<{ id?: string; x?: number; y?: number }>(payload);
       if (pos?.id != null && pos.x != null && pos.y != null) {
@@ -122,6 +154,7 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
       break;
     }
     case 'poll': {
+      if (features.enabledFeatures.poll === false) break;
       if (payload.value === 'null') {
         /* v8 ignore next 4 */
         if (senderId && !isSenderModeratorOrHost(senderId, features)) {
@@ -151,6 +184,7 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
       break;
     }
     case 'poll_req': {
+      if (features.enabledFeatures.poll === false) break;
       const data = parse<{
         action?: 'create' | 'approve' | 'reject' | 'cancel';
         request?: import('@/stores/sessionFeaturesStore').PollRequest;
@@ -176,6 +210,7 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
       break;
     }
     case 'notes': {
+      if (features.enabledFeatures.notes === false) break;
       const data = parse<any>(payload);
       if (!data) break;
       if ('action' in data && data.action) {
@@ -244,21 +279,15 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
         allowParticipantRecording?: boolean;
         lobbyEnabled?: boolean;
         stagePromotionEnabled?: boolean;
+        enabledFeatures?: Partial<Record<import('@/utils/featureAccess').GatedFeatureKey, boolean>>;
       }>(payload);
       if (data) {
-        if (data.allowParticipantRecording !== undefined) {
-          features.allowParticipantRecording = data.allowParticipantRecording;
-        }
-        if (data.lobbyEnabled !== undefined) {
-          features.lobbyEnabled = data.lobbyEnabled;
-        }
-        if (data.stagePromotionEnabled !== undefined) {
-          features.stagePromotionEnabled = data.stagePromotionEnabled;
-        }
+        features.applyConfigUpdate(data);
       }
       break;
     }
     case 'chat': {
+      if (features.enabledFeatures.chat === false) break;
       const data = parse<{
         action?: string;
         messageId?: string;
@@ -311,6 +340,8 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
         timestamp?: number;
       }>(payload);
       if (!data?.action || !data.id) break;
+      if (data.type === 'whiteboard' && features.enabledFeatures.whiteboard === false) break;
+      if (data.type === 'notes' && features.enabledFeatures.notes === false) break;
       if (data.action === 'propose' && data.type && data.payload) {
         features.addModerationChange({
           id: data.id,
@@ -348,6 +379,7 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
       break;
     }
     case 'wb': {
+      if (features.enabledFeatures.whiteboard === false) break;
       const data = parse<WhiteboardCommand>(payload);
       if (!data) break;
       if (data.action === 'clear') {
@@ -366,6 +398,7 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
       break;
     }
     case 'stage': {
+      if (features.enabledFeatures.stage === false) break;
       const data = parse<StageCommand & { _cmdId?: string }>(payload);
       if (!data?.action) break;
       if (data._cmdId) {

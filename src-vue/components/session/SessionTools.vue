@@ -94,7 +94,7 @@ function openPanel(name: 'notes' | 'whiteboard') {
       </div>
     </div>
     <IconButton
-      v-if="features.canUseNotes || features.isHost || features.isModerator"
+      v-if="features.canUseNotes"
       label="Shared notes"
       :active="features.panel === 'notes'"
       :activity-dot="features.hasUnreadNotes"
@@ -105,7 +105,7 @@ function openPanel(name: 'notes' | 'whiteboard') {
       <template #icon><AppIcon name="file-text" /></template>
     </IconButton>
     <IconButton
-      v-if="features.canUseWhiteboard || features.isHost || features.isModerator"
+      v-if="features.canUseWhiteboard"
       label="Whiteboard"
       :active="features.panel === 'whiteboard'"
       :activity-dot="features.hasUnreadWhiteboard"
