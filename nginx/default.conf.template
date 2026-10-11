@@ -97,6 +97,13 @@ server {
         limit_req zone=api_limit burst=20 nodelay;
     }
 
+    error_page 502 503 504 /maintenance.html;
+
+    location = /maintenance.html {
+        internal;
+        add_header Cache-Control "no-store";
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
