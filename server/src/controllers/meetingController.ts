@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db.js';
 import { redisClient } from '../config/redis.js';
 import { decryptToken, encryptToken } from '../utils/crypto.js';
@@ -789,21 +790,47 @@ export async function updateNotesState(req: Request, res: Response) {
   }
 }
 
+const DEFAULT_ENABLED_FEATURES = {
+  chat: true,
+  notes: true,
+  whiteboard: true,
+  poll: true,
+  stage: true,
+};
+
 export async function getAccessState(req: Request, res: Response) {
   const roomName = req.params.roomName as string;
   const cacheKey = `meeting:state:${roomName}:access`;
   try {
     const raw = await redisClient.get(cacheKey);
     if (raw) {
-      return res.json(JSON.parse(raw));
+      const parsed = JSON.parse(raw);
+      if (!parsed.enabledFeatures) {
+        parsed.enabledFeatures = { ...DEFAULT_ENABLED_FEATURES };
+      }
+      return res.json(parsed);
     }
     const meeting = await prisma.meeting.findUnique({
       where: { roomName },
       include: { configs: true },
     });
-    const defaults = meeting?.configs?.roomDefaults ? JSON.parse(meeting.configs.roomDefaults) : null;
+    let defaults = null;
+    let enabledFeatures = { ...DEFAULT_ENABLED_FEATURES };
+    if (meeting?.configs?.roomDefaults) {
+      try {
+        const parsedDefaults = JSON.parse(meeting.configs.roomDefaults);
+        if (parsedDefaults?.enabledFeatures) {
+          enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...parsedDefaults.enabledFeatures };
+          defaults = parsedDefaults.defaults ?? null;
+        } else {
+          defaults = parsedDefaults;
+        }
+      } catch {
+        defaults = null;
+      }
+    }
     const grants = meeting?.configs?.userGrants ? JSON.parse(meeting.configs.userGrants) : {};
-    const access = { defaults, grants };
+    const access = { defaults, grants, enabledFeatures };
     await redisClient.setEx(cacheKey, 86400, JSON.stringify(access));
     return res.json(access);
   } catch (err) {
@@ -814,9 +841,9 @@ export async function getAccessState(req: Request, res: Response) {
 
 export async function updateAccessDefaults(req: Request, res: Response) {
   const roomName = req.params.roomName as string;
-  const { defaults } = req.body;
-  if (!defaults) {
-    return res.status(400).json({ error: 'Missing defaults payload' });
+  const { defaults, enabledFeatures } = req.body;
+  if (!defaults && !enabledFeatures) {
+    return res.status(400).json({ error: 'Missing defaults or enabledFeatures payload' });
   }
   try {
     const meeting = await prisma.meeting.findUnique({ where: { roomName } });
@@ -832,21 +859,27 @@ export async function updateAccessDefaults(req: Request, res: Response) {
 
     if (!isAnonymousMeeting) {
       const role = await getMeetingRoleForUser(roomName, req.user?.id);
-      if (role !== 'host' && role !== 'moderator') {
-        return res.status(403).json({ error: 'Forbidden: Only the host or a moderator can update access defaults' });
+      if (role !== 'host') {
+        return res.status(403).json({ error: 'Forbidden: Only the host can update room defaults or enabled features' });
       }
     }
 
     const cacheKey = `meeting:state:${roomName}:access`;
     const raw = await redisClient.get(cacheKey);
-    const access = raw ? JSON.parse(raw) : { defaults: null, grants: {} };
-    access.defaults = defaults;
+    const access = raw ? JSON.parse(raw) : { defaults: null, grants: {}, enabledFeatures: { ...DEFAULT_ENABLED_FEATURES } };
+    if (defaults !== undefined) {
+      access.defaults = defaults;
+    }
+    if (enabledFeatures !== undefined) {
+      access.enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...enabledFeatures };
+    }
     await redisClient.setEx(cacheKey, 86400, JSON.stringify(access));
     if (meeting) {
+      const dbPayload = JSON.stringify({ defaults: access.defaults, enabledFeatures: access.enabledFeatures });
       await prisma.meetingConfig.upsert({
         where: { meetingId: meeting.id },
-        update: { roomDefaults: JSON.stringify(defaults) },
-        create: { meetingId: meeting.id, roomDefaults: JSON.stringify(defaults) },
+        update: { roomDefaults: dbPayload },
+        create: { meetingId: meeting.id, roomDefaults: dbPayload },
       });
     }
     return res.json({ success: true, access });
@@ -876,24 +909,54 @@ export async function updateAccessGrants(req: Request, res: Response) {
     });
 
     const isAnonymousMeeting = anonUser && meeting.hostId === anonUser.id;
+    let callerRole: LoungeMeshRole = 'attendee';
 
     if (!isAnonymousMeeting) {
-      const role = await getMeetingRoleForUser(roomName, req.user?.id);
-      if (role !== 'host' && role !== 'moderator') {
+      callerRole = await getMeetingRoleForUser(roomName, req.user?.id);
+      if (callerRole !== 'host' && callerRole !== 'moderator') {
         return res.status(403).json({ error: 'Forbidden: Only the host or a moderator can update access grants' });
       }
     }
 
+    // Only host can grant moderator role
+    if (grants.moderator === true && callerRole !== 'host' && !isAnonymousMeeting) {
+      return res.status(403).json({ error: 'Forbidden: Only the host can grant moderator privileges' });
+    }
+
     const cacheKey = `meeting:state:${roomName}:access`;
-    let access;
+    let access: any;
     const raw = await redisClient.get(cacheKey);
     if (raw) {
       access = JSON.parse(raw);
     } else {
-      const defaults = meeting?.configs?.roomDefaults ? JSON.parse(meeting.configs.roomDefaults) : null;
+      let defaults = null;
+      let enabledFeatures = { ...DEFAULT_ENABLED_FEATURES };
+      if (meeting?.configs?.roomDefaults) {
+        try {
+          const parsed = JSON.parse(meeting.configs.roomDefaults);
+          if (parsed?.enabledFeatures) {
+            enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...parsed.enabledFeatures };
+            defaults = parsed.defaults;
+          } else {
+            defaults = parsed;
+          }
+        } catch {}
+      }
       const grantsDb = meeting?.configs?.userGrants ? JSON.parse(meeting.configs.userGrants) : {};
-      access = { defaults, grants: grantsDb };
+      access = { defaults, grants: grantsDb, enabledFeatures };
     }
+
+    const enabled = access.enabledFeatures || DEFAULT_ENABLED_FEATURES;
+    // Check if any granted feature is disabled by host room-wide
+    for (const [feat, val] of Object.entries(grants)) {
+      if (feat !== 'moderator' && val === true && (enabled as Record<string, boolean>)[feat] === false) {
+        return res.status(403).json({
+          error: `Forbidden: Cannot grant "${feat}" because it is disabled by the host for this room`,
+          feature: feat,
+        });
+      }
+    }
+
     access.grants = access.grants || {};
     access.grants[userId] = grants;
     await redisClient.setEx(cacheKey, 86400, JSON.stringify(access));
@@ -907,6 +970,52 @@ export async function updateAccessGrants(req: Request, res: Response) {
     return res.json({ success: true, access });
   } catch (err) {
     console.error('Update access grants error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getRoleSnapshot(req: Request, res: Response) {
+  const roomName = req.params.roomName as string;
+  try {
+    const meeting = await prisma.meeting.findUnique({
+      where: { roomName },
+      select: { hostId: true, eventyayEventSlug: true },
+    });
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    let role: 'host' | 'moderator' | 'attendee' = 'attendee';
+    const userId = req.user?.id || (req.access?.sub) || 'anonymous';
+    if (meeting.eventyayEventSlug) {
+      if (req.access && req.access.room === roomName) {
+        role = normalizeRole(req.access.role) as any;
+      }
+    } else {
+      role = (await getMeetingRoleForUser(roomName, req.user?.id)) as any;
+    }
+
+    const accessKey = `meeting:state:${roomName}:access`;
+    const raw = await redisClient.get(accessKey);
+    let enabledFeatures = { ...DEFAULT_ENABLED_FEATURES };
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.enabledFeatures) {
+          enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...parsed.enabledFeatures };
+        }
+      } catch {}
+    }
+
+    const exp = Math.floor(Date.now() / 1000) + 120;
+    const token = jwt.sign(
+      { sub: userId, room: roomName, role, enabledFeatures },
+      process.env.JWT_SECRET || 'fallback-jwt-secret-for-dev',
+      { expiresIn: '120s' }
+    );
+    return res.json({ token, role, enabledFeatures, exp });
+  } catch (err) {
+    console.error('getRoleSnapshot error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

@@ -151,4 +151,44 @@ describe('HostRoomSettingsSection', () => {
     expect(processNotesTemplateFile).toHaveBeenCalledTimes(2);
     wrapper.unmount();
   });
+
+  it('prompts to toggle room features with confirmation modal', async () => {
+    const features = useSessionFeaturesStore();
+    const cmdSpy = vi.spyOn(getMediaEngineInstance(), 'sendCommand');
+    const { wrapper } = await mountWithApp(HostRoomSettingsSection);
+
+    // Initial state: chat is enabled
+    const toggleBtns = wrapper.findAll('.featureToggleBtn');
+    expect(toggleBtns.length).toBe(5);
+    expect(toggleBtns[0].text()).toBe('Disable');
+
+    // Click Disable for Public Chat
+    await toggleBtns[0].trigger('click');
+    expect(wrapper.find('.confirmModalOverlay').exists()).toBe(true);
+    expect(wrapper.find('.confirmModalText').text()).toContain('disable Public Chat');
+
+    // Click Cancel
+    await wrapper.find('.cancelConfirmBtn').trigger('click');
+    expect(wrapper.find('.confirmModalOverlay').exists()).toBe(false);
+    expect(features.enabledFeatures.chat).not.toBe(false);
+
+    // Click Disable again and Confirm
+    await toggleBtns[0].trigger('click');
+    await wrapper.find('.applyConfirmBtn').trigger('click');
+    expect(features.enabledFeatures.chat).toBe(false);
+    expect(cmdSpy).toHaveBeenCalledWith('config', expect.stringContaining('"chat":false'));
+    expect(wrapper.find('.confirmModalOverlay').exists()).toBe(false);
+
+    // Now button says Enable
+    expect(wrapper.findAll('.featureToggleBtn')[0].text()).toBe('Enable');
+
+    // Click Enable and Confirm
+    await wrapper.findAll('.featureToggleBtn')[0].trigger('click');
+    expect(wrapper.find('.confirmModalText').text()).toContain('enable Public Chat');
+    await wrapper.find('.applyConfirmBtn').trigger('click');
+    expect(features.enabledFeatures.chat).toBe(true);
+
+    cmdSpy.mockRestore();
+    wrapper.unmount();
+  });
 });
