@@ -1,0 +1,80 @@
+---
+name: loungemesh-architecture
+description: >-
+  Comprehensive guide to LoungeMesh architecture across Vue 3 SPA, headless WebRTC JitsiAdapter,
+  Web Audio engine, Express backend, PostgreSQL (Prisma), Redis, and Eventyay token bridge.
+---
+
+# LoungeMesh Architecture Skill
+
+This skill explains the architectural layers and component interactions of LoungeMesh. Use this skill when designing features, refactoring components, or understanding data flow across the system.
+
+---
+
+## 1. Multi-Tier System Overview
+
+LoungeMesh consists of four distinct architectural tiers:
+
+1. **Frontend SPA (`src-vue/`)**:
+   - Built with Vue 3 (Composition API), Vite, TypeScript, and Pinia.
+   - Manages the 2D interactive lounge canvas, viewport panning/zooming, and UI state.
+2. **Audio/Video Media Engine (`src-vue/services/` & `src-vue/composables/`)**:
+   - Headless WebRTC integration via `lib-jitsi-meet`.
+   - Web Audio API pipeline routing each remote audio track through dedicated `GainNode` instances for spatial distance attenuation.
+   - Dynamic viewport culling via `receiverConstraints.ts`.
+3. **Backend API (`server/`)**:
+   - Node.js, Express, TypeScript, Prisma ORM.
+   - Provides meeting scheduling, role resolution, bundled room state (`/init`), and session auditing.
+   - Persistent store: PostgreSQL.
+   - Fast cache and pub/sub: Redis.
+4. **Media Infrastructure (`docker/`)**:
+   - Jitsi Videobridge (JVB), Prosody XMPP, Jicofo Focus.
+   - Nginx reverse proxy with real client IP forwarding and CSP header injection.
+
+---
+
+## 2. Frontend Layering & Adapter Boundary
+
+```
+UI Layer (Vue Components / Pages)
+       ↓
+State Layer (Pinia Stores: localStore, conferenceStore, sessionFeaturesStore)
+       ↓
+Engine Coordinator (`useMediaEngine.ts`)
+       ↓
+Contract Interface (`MediaService.ts`)
+       ↓
+Adapter Implementation (`JitsiAdapter.ts`)
+       ↓
+WebRTC Driver (`lib-jitsi-meet`) & Audio Engine (Web Audio API)
+```
+
+### Critical Rules
+- **No Direct Jitsi Imports**: UI components and Pinia stores must never import from `lib-jitsi-meet`. All calls must flow through `MediaService`.
+- **Decoupled Stores**:
+  - `localStore.ts`: Manages local user identity, 2D avatar coordinates `(x, y)`, mic/camera states, and screen calculation triggers.
+  - `conferenceStore.ts`: Tracks remote participants, active connection states, and track mappings.
+  - `sessionFeaturesStore.ts`: Tracks whiteboard strokes, notes, polls, stage mode, room defaults, and role verification.
+
+---
+
+## 3. Spatial Audio & Web Worker Pipeline
+
+1. When avatars move or the viewport is panned, `calculateUsersOnScreen()` in `localStore` triggers proximity calculations.
+2. The distance vector between the local avatar and each remote avatar is dispatched to `src-vue/workers/proximityAudio.worker.ts`.
+3. The worker calculates distance-based attenuation without blocking the main rendering thread.
+4. `JitsiAdapter` updates the `GainNode.gain` values using exponential smoothing ramps (`setTargetAtTime`) to avoid clicks and pops.
+
+---
+
+## 4. Backend & Room State Bundling
+
+To avoid cascading HTTP requests when entering a room, the frontend queries:
+```
+GET /api/meetings/state/:roomName/init
+```
+Handled by `getRoomInitialState` in `server/src/controllers/meetingController.ts`:
+- Concurrently queries PostgreSQL (Prisma) and Redis keys (`whiteboard`, `notes`, `access`, `poll`, `background`).
+- Sanitizes room configuration using `sanitizeMeetingConfig` (omits `joinPin` and internal tables).
+- Resolves caller role (`host`, `moderator`, `attendee`).
+- Returns a single unified response payload.
