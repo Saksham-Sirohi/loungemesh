@@ -1,10 +1,12 @@
 import { markRaw } from 'vue';
 import type { MediaService } from '@/services/MediaService';
+import type { JitsiTrack } from '@/types/jitsi';
 import { useConferenceStore } from '@/stores/conferenceStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useLocalStore } from '@/stores/localStore';
 import { useSessionFeaturesStore } from '@/stores/sessionFeaturesStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useReconnectStore } from '@/stores/reconnectStore';
 import { handleSessionCommand } from '@/utils/sessionCommands';
 import { grantsPayloadForSync } from '@/utils/sessionAccess';
 import { participantIdFromTrack, sanitizeParticipantProperties } from '@/utils/jitsiParticipant';
@@ -29,100 +31,9 @@ import {
 export function wireStoreSync(engine: MediaService): void {
   const conferenceStore = useConferenceStore();
 
-  engine.on('connected', () => {
-    useConnectionStore().$patch({ connected: true, error: undefined });
-  });
-  engine.on('disconnected', () => {
-    useConnectionStore().$patch({ connected: false });
-  });
-  engine.on('connectionFailed', (detail) => {
-    mediaDebug('wiring', 'connectionFailed', { detail });
-    useConnectionStore().$patch({
-      connected: false,
-      error: normalizeSessionError(detail, 'connection'),
-      connection: undefined,
-    });
-  });
-  engine.on('conferenceJoined', () => {
-    unlockMediaPlaybackNow(engine);
-    mediaDebug('wiring', 'conferenceJoined', { localUserId: engine.getLocalUserId() });
-    conferenceStore.isJoined = true;
-    conferenceStore.isJoining = false;
-    conferenceStore.error = undefined;
-    const conf = engine.getConference();
-    if (conf) {
-      conferenceStore.conferenceObject = markRaw(conf as object) as typeof conferenceStore.conferenceObject;
-    }
-    const id = engine.getLocalUserId();
-    const local = useLocalStore();
-    const features = useSessionFeaturesStore();
-    if (id) {
-      local.setMyID(id);
-      const auth = useAuthStore();
-      /* v8 ignore start */
-      if (auth.isAuthenticated && auth.user?.avatarUrl) {
-        engine.setLocalParticipantProperty('avatarUrl', auth.user.avatarUrl);
-      }
-      /* v8 ignore stop */
-      if (!features.isFetchingConfig) {
-        features.syncOrClaimHostOnLoaded(engine);
-      }
-      const others = Object.values(conferenceStore.users).map((u) => u.pos);
-      local.setLocalPosition(spreadInitialUserPosition(others));
-      local.publishLocalPosition();
-      scheduleReceiverRefresh();
-      emitMediaStateSnapshot('conferenceJoined');
-    }
-  });
-  engine.on('conferenceError', (detail) => {
-    mediaDebug('wiring', 'conferenceError', { detail, joined: engine.isJoined() });
-    if (!detail?.trim() || engine.isJoined()) return;
-    conferenceStore.$patch({
-      error: normalizeSessionError(detail, 'conference'),
-      conferenceObject: undefined,
-      isJoined: false,
-      isJoining: false,
-    });
-  });
-  engine.on('userJoined', (id, user) => {
-    conferenceStore.addUser(id, user);
-    const props = sanitizeParticipantProperties(
-      (user as { _properties?: Record<string, unknown> })._properties,
-    );
-    if ('handRaised' in props) {
-      applyParticipantHandRaised(id, parseHandRaised(props.handRaised));
-    }
-    const features = useSessionFeaturesStore();
-    if (features.isHost) {
-      const local = useLocalStore();
-      engine.sendCommand('host', JSON.stringify({ hostId: local.id }));
-      engine.sendCommand(
-        'access',
-        JSON.stringify(grantsPayloadForSync(features.roomDefaults, id, features.userGrants)),
-      );
-      if (features.sharedNotes) {
-        broadcastSharedNotes(engine, features.sharedNotes);
-      }
-      broadcastHostRoomSettings(engine, features);
-    }
-    scheduleReceiverRefresh();
-  });
-  engine.on('userLeft', (id) => {
-    clearStageIfParticipantLeft(id);
-    conferenceStore.removeUser(id);
-  });
-  engine.on('displayNameChanged', (id, displayName) => {
-    conferenceStore.updateUserDisplayName(id, displayName);
-  });
-  engine.on('trackAdded', (track) => {
-    const id = participantIdFromTrack(track);
-    mediaDebugTrack('wiring', 'trackAdded', track, { resolvedParticipantId: id });
-    if (!id) {
-      mediaDebug('wiring', 'trackAdded:skipped', { reason: 'no-participant-id' });
-      return;
-    }
-    if (!conferenceStore.users[id]) conferenceStore.addUser(id);
+  let heartbeatTimer: number | undefined;
 
+  function applyRemoteTrackToStore(id: string, track: JitsiTrack) {
     let kind: 'audio' | 'video' | 'screenshareAudio' = 'video';
     if (track.getType() === 'audio') {
       const user = conferenceStore.users[id];
@@ -156,6 +67,153 @@ export function wireStoreSync(engine: MediaService): void {
     }
     if (kind === 'video') emitMediaStateSnapshot('trackAdded');
     scheduleReceiverRefresh();
+  }
+
+  engine.on('connected', () => {
+    useConnectionStore().$patch({ connected: true, error: undefined });
+    useReconnectStore().onConnectionRecovered();
+  });
+  engine.on('disconnected', () => {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = undefined;
+    }
+    useConnectionStore().$patch({ connected: false });
+    useReconnectStore().onConnectionLost('disconnected');
+  });
+  engine.on('connectionFailed', (detail) => {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = undefined;
+    }
+    mediaDebug('wiring', 'connectionFailed', { detail });
+    useConnectionStore().$patch({
+      connected: false,
+      error: normalizeSessionError(detail, 'connection'),
+      connection: undefined,
+    });
+    useReconnectStore().onConnectionLost('connection_failed');
+  });
+  engine.on('conferenceJoined', () => {
+    unlockMediaPlaybackNow(engine);
+    mediaDebug('wiring', 'conferenceJoined', { localUserId: engine.getLocalUserId() });
+    conferenceStore.isJoined = true;
+    conferenceStore.isJoining = false;
+    conferenceStore.error = undefined;
+    const conf = engine.getConference();
+    if (conf) {
+      conferenceStore.conferenceObject = markRaw(conf as object) as typeof conferenceStore.conferenceObject;
+    }
+    const id = engine.getLocalUserId();
+    const local = useLocalStore();
+    const features = useSessionFeaturesStore();
+    if (id) {
+      local.setMyID(id);
+      const auth = useAuthStore();
+      /* v8 ignore start */
+      if (auth.isAuthenticated && auth.user?.avatarUrl) {
+        engine.setLocalParticipantProperty('avatarUrl', auth.user.avatarUrl);
+      }
+      /* v8 ignore stop */
+      if (!features.isFetchingConfig) {
+        features.syncOrClaimHostOnLoaded(engine);
+      }
+      const others = Object.values(conferenceStore.users).map((u) => u.pos);
+      local.setLocalPosition(spreadInitialUserPosition(others));
+      local.publishLocalPosition();
+      scheduleReceiverRefresh();
+      emitMediaStateSnapshot('conferenceJoined');
+
+      engine.sendCommand(
+        'hello',
+        JSON.stringify({
+          id,
+          userKey: local.userKey,
+          pos: local.pos,
+          name: conferenceStore.displayName,
+        }),
+      );
+      engine.sendCommand('hello_req', JSON.stringify({ from: id }));
+
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = window.setInterval(() => {
+        if (!engine.isJoined()) return;
+        const myId = local.id || engine.getLocalUserId();
+        if (myId) {
+          engine.sendCommand(
+            'hello',
+            JSON.stringify({
+              id: myId,
+              userKey: local.userKey,
+              pos: local.pos,
+              name: conferenceStore.displayName,
+            }),
+          );
+        }
+        conferenceStore.pruneStaleUsers(45000);
+      }, 5000);
+    }
+  });
+  engine.on('conferenceError', (detail) => {
+    mediaDebug('wiring', 'conferenceError', { detail, joined: engine.isJoined() });
+    if (!detail?.trim() || engine.isJoined()) return;
+    conferenceStore.$patch({
+      error: normalizeSessionError(detail, 'conference'),
+      conferenceObject: undefined,
+      isJoined: false,
+      isJoining: false,
+    });
+  });
+  engine.on('userJoined', (id, user) => {
+    conferenceStore.addUser(id, user);
+    const props = sanitizeParticipantProperties(
+      (user as { _properties?: Record<string, unknown> })._properties,
+    );
+    if ('handRaised' in props) {
+      applyParticipantHandRaised(id, parseHandRaised(props.handRaised));
+    }
+    const local = useLocalStore();
+    if (local.id && local.id !== id) {
+      engine.sendCommand(
+        'hello',
+        JSON.stringify({
+          id: local.id,
+          userKey: local.userKey,
+          pos: local.pos,
+          name: conferenceStore.displayName,
+        }),
+      );
+    }
+    const features = useSessionFeaturesStore();
+    if (features.isHost) {
+      engine.sendCommand('host', JSON.stringify({ hostId: local.id }));
+      engine.sendCommand(
+        'access',
+        JSON.stringify(grantsPayloadForSync(features.roomDefaults, id, features.userGrants)),
+      );
+      if (features.sharedNotes) {
+        broadcastSharedNotes(engine, features.sharedNotes);
+      }
+      broadcastHostRoomSettings(engine, features);
+    }
+    scheduleReceiverRefresh();
+  });
+  engine.on('userLeft', (id) => {
+    clearStageIfParticipantLeft(id);
+    conferenceStore.removeUser(id);
+  });
+  engine.on('displayNameChanged', (id, displayName) => {
+    conferenceStore.updateUserDisplayName(id, displayName);
+  });
+  engine.on('trackAdded', (track) => {
+    const id = participantIdFromTrack(track);
+    mediaDebugTrack('wiring', 'trackAdded', track, { resolvedParticipantId: id });
+    if (!id) {
+      mediaDebug('wiring', 'trackAdded:skipped', { reason: 'no-participant-id' });
+      return;
+    }
+    if (!conferenceStore.users[id]) conferenceStore.addUser(id);
+    applyRemoteTrackToStore(id, track);
   });
   engine.on('trackMuteChanged', (track) => {
     const id = participantIdFromTrack(track);

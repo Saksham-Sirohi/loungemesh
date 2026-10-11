@@ -2,6 +2,8 @@
 import { ref } from 'vue';
 import logo from '@/assets/logo.svg';
 import { useAuthStore } from '@/stores/authStore';
+import { useSessionFeaturesStore } from '@/stores/sessionFeaturesStore';
+import AppIcon from '@/components/ui/AppIcon.vue';
 import AuthPrompt from '@/components/auth/AuthPrompt.vue';
 import UserProfilePopover from '@/components/auth/UserProfilePopover.vue';
 
@@ -13,6 +15,7 @@ withDefaults(
 );
 
 const auth = useAuthStore();
+const features = useSessionFeaturesStore();
 const showProfile = ref(false);
 
 function handleProfileClick() {
@@ -42,9 +45,20 @@ function handleProfileClick() {
     </div>
   </header>
   
-  <div v-else class="sessionBrand" aria-hidden="true">
-    <img :src="logo" alt="" class="logoMark" width="40" height="40" />
+  <div v-else class="sessionBrand">
+    <img :src="logo" alt="" class="logoMark" width="36" height="36" />
     <span class="brandWord">LoungeMesh</span>
+    <div class="headerRoleBadge" :class="`role-${features.userRole}`" data-testid="header-role-badge">
+      <span v-if="features.isHost" class="badgeInner host">
+        <AppIcon name="award" :size="12" /> Host
+      </span>
+      <span v-else-if="features.isModerator" class="badgeInner mod">
+        <AppIcon name="shield" :size="12" /> Moderator
+      </span>
+      <span v-else class="badgeInner attendee">
+        <AppIcon name="user" :size="12" /> Attendee
+      </span>
+    </div>
   </div>
 </template>
 
@@ -137,18 +151,18 @@ function handleProfileClick() {
   top: 14px;
   left: 18px;
   right: auto;
-  z-index: 1;
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   pointer-events: none;
   user-select: none;
-  opacity: 0.22;
 }
 
 .logoMark {
   flex-shrink: 0;
   filter: saturate(0.85);
+  opacity: 0.35;
 }
 
 .brandWord {
@@ -156,5 +170,45 @@ function handleProfileClick() {
   font-size: 1.1rem;
   letter-spacing: 0.02em;
   color: var(--color-mono30);
+  opacity: 0.35;
+}
+
+.headerRoleBadge {
+  display: inline-flex;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.badgeInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+}
+
+.badgeInner.host {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+}
+
+.badgeInner.mod {
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  color: #818cf8;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+}
+
+.badgeInner.attendee {
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #64748b;
 }
 </style>

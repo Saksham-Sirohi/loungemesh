@@ -11,6 +11,7 @@ import RemoteUsers from '@/components/room/RemoteUsers.vue';
 import LocalUser from '@/components/room/LocalUser.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ErrorHandler from '@/components/common/ErrorHandler.vue';
+import ConnectionBanner from '@/components/common/ConnectionBanner.vue';
 import { defineAsyncComponent } from 'vue';
 import ScreenshareButton from '@/components/footer/ScreenshareButton.vue';
 import SharedScreens from '@/components/screenshare/SharedScreens.vue';
@@ -200,6 +201,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="sessionRoot" :data-session-id="props.id">
+  <ConnectionBanner />
   <ErrorHandler />
   <AppHeader />
   <JitsiConnection />
@@ -273,19 +275,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </Transition>
-
-  <!-- Session Role Status Pill -->
-  <div class="sessionRoleBadge" :class="`role-${features.userRole}`">
-    <span v-if="features.isHost" class="badgeItem hostBadge">
-      <AppIcon name="award" :size="12" /> Host
-    </span>
-    <span v-else-if="features.isModerator" class="badgeItem modBadge">
-      <AppIcon name="shield" :size="12" /> Moderator
-    </span>
-    <span v-else class="badgeItem attendeeBadge">
-      <AppIcon name="user" :size="12" /> Attendee
-    </span>
-  </div>
 
   <!-- Top Moderation Changes Banner -->
   <div
@@ -908,47 +897,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-/* Session Role Indicator Badge */
-.sessionRoleBadge {
-  position: fixed;
-  top: 14px;
-  left: 170px;
-  z-index: 1000;
-  pointer-events: none;
-}
-
-.badgeItem {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.badgeItem.hostBadge {
-  background: rgba(245, 158, 11, 0.18);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  color: #f59e0b;
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
-}
-
-.badgeItem.modBadge {
-  background: rgba(139, 92, 246, 0.18);
-  border: 1px solid rgba(139, 92, 246, 0.45);
-  color: #a78bfa;
-  box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
-}
-
-.badgeItem.attendeeBadge {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.8);
 }
 
 .slide-down-enter-active,

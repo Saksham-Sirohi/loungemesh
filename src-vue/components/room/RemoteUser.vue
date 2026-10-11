@@ -47,6 +47,13 @@ const videoTrackKey = computed(() => {
   return t?.getTrackLabel?.() ?? props.id;
 });
 const isPresenter = computed(() => features.stageOccupantId === props.id);
+const role = computed(() => {
+  if (props.id === features.hostId) return 'host';
+  if (features.userGrants[props.id]?.moderator || conference.users[props.id]?.properties?.role === 'moderator') {
+    return 'moderator';
+  }
+  return 'attendee';
+});
 const distance = computed(() => {
   if (!local.pos || !user.value?.pos) return 0;
   return getVectorDistance(local.pos, user.value.pos);
@@ -100,7 +107,7 @@ const isStageOccupant = computed(() => {
     </div>
     <RemoteAudio :id="id" :volume="user?.volume" />
     <MuteIndicator v-if="user.mute" />
-    <NameTag>
+    <NameTag :role="role">
       {{ nameLabel }}
     </NameTag>
   </div>
