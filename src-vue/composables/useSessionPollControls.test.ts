@@ -142,6 +142,7 @@ describe('useSessionPollControls', () => {
 
   it('handles requestPoll and cancelPollRequest for participants', () => {
     const features = useSessionFeaturesStore();
+    const conference = useConferenceStore();
     const local = useLocalStore();
     local.setMyID('attendee-1');
     const cmdSpy = vi.spyOn(getMediaEngineInstance(), 'sendCommand');
@@ -168,6 +169,13 @@ describe('useSessionPollControls', () => {
 
     // Cancel with no id does nothing
     cancelPollRequest();
+
+    // Valid request with blank displayName defaults to Participant
+    conference.displayName = '';
+    pollQuestion.value = 'Another question?';
+    pollOptionDrafts.value = ['A', 'B'];
+    requestPoll();
+    expect(features.pendingPollRequests[0].requesterName).toBe('Participant');
   });
 
   it('handles approvePollRequest and rejectPollRequest for moderators', () => {

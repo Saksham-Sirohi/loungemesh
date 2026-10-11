@@ -107,7 +107,7 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
     whiteboardSnapshots: [] as Array<WhiteboardStroke[]>,
     roomDefaults: defaultUserGrants(),
     userGrants: {} as Record<string, Partial<UserGrants>>,
-    panel: '' as '' | 'reactions' | 'poll' | 'moderator' | 'notes' | 'whiteboard' | 'chat',
+    panel: '' as '' | 'reactions' | 'poll' | 'moderator' | 'participants' | 'notes' | 'whiteboard' | 'chat',
     pendingHostClaim: false,
     notesActivitySeq: 0,
     notesSeenSeq: 0,
