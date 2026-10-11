@@ -9,7 +9,7 @@ This guide outlines the performance architecture and resource optimization strat
 LoungeMesh is designed with an **ultra-low baseline resource profile**:
 - **Baseline Hardware Target**: Runs reliably on a low-cost **2 vCPU / 2 GB RAM** instance.
 - **Predictable Scaling**: Rather than applying artificial memory or CPU caps (which lead to dropped connections or container restarts under load), the system is optimized at the algorithmic, media, network, and database levels to keep resource consumption minimal by design.
-- **Horizontal & Vertical Headroom**: As compute is added (e.g., 4 vCPU / 8 GB RAM), the system scales to handle **100+ concurrent active participants** without architectural bottlenecks.
+- **Horizontal & Vertical Headroom**: As compute is scaled (e.g., 4 vCPU / 8 GB RAM for 40–60 participants, up to 8 vCPU / 16 GB RAM), the system comfortably handles **100+ concurrent active participants** without architectural bottlenecks.
 
 ---
 
@@ -95,11 +95,12 @@ The Nginx template (`nginx/default.conf.template`) includes optimizations for hi
 
 - **Real Client IP Forwarding**:
   ```nginx
-  set_real_ip_from 0.0.0.0/0;
+  # Replace with your deployment's actual trusted reverse proxy / load balancer CIDR
+  set_real_ip_from 10.0.0.0/8;
   real_ip_header X-Forwarded-For;
   real_ip_recursive on;
   ```
-  Ensures rate-limiting accurately tracks client IP addresses instead of throttling the upstream Docker bridge gateway IP.
+  Ensures rate-limiting accurately tracks client IP addresses instead of throttling the upstream Docker bridge gateway IP. Deployments must configure their specific trusted proxy CIDRs (e.g., VPC or Cloudflare ranges) rather than an open range (`0.0.0.0/0`), preventing clients from spoofing `X-Forwarded-For` headers to bypass rate limits.
 - **Rate Limit Expansion**:
   `limit_req_zone` configured with **50 requests/second** and **burst=100**, preventing legitimate multi-user page loads from receiving HTTP 429 errors.
 - **Compression Offloading**: `gzip off;` applied to `/colibri-ws/` and `/xmpp-websocket` to eliminate CPU overhead on encrypted WebRTC signaling streams.

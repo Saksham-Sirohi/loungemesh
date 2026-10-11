@@ -44,7 +44,6 @@ On a fresh Linux host (Ubuntu 22.04+ or Debian 12), the bootstrap command instal
 ```bash
 ./scripts/loungemesh.sh bootstrap \
   --app-host=loungemesh.example.com \
-  --jitsi-host=jitsi.example.com \
   --email=admin@example.com \
   --deploy
 ```

@@ -109,9 +109,9 @@ Opens [http://localhost:5555](http://localhost:5555).
 
 For high-concurrency production deployments, append connection pool options to `DATABASE_URL`:
 ```env
-DATABASE_URL="postgresql://loungemesh:loungemesh@postgres:5432/loungemesh?schema=public&connection_limit=20&pool_timeout=15"
+DATABASE_URL="postgresql://<db_user>:<db_password>@postgres:5432/loungemesh?schema=public&connection_limit=20&pool_timeout=15"
 ```
-- `connection_limit=20`: Caps simultaneous PostgreSQL connections to prevent thread exhaustion on low-memory servers (2 GB RAM).
+- `connection_limit=20`: Caps simultaneous PostgreSQL connections per `PrismaClient` instance to prevent thread exhaustion on low-memory servers (2 GB RAM). Note that this limit applies per application process/replica; if running multiple backend instances, size this value against the total PostgreSQL connection budget (`max_connections`).
 - `pool_timeout=15`: Aborts queries waiting over 15 seconds for an available pool slot.
 
 ---
@@ -119,11 +119,13 @@ DATABASE_URL="postgresql://loungemesh:loungemesh@postgres:5432/loungemesh?schema
 ## API Endpoints Reference
 
 ### Room State & Initialization
+
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/meetings/state/:roomName/init` | **Single-roundtrip bundle**: Returns `{ role, config, whiteboard, notes, access, poll, background }` in one request. Config is strictly sanitized to prevent leaking `joinPin`. |
 
 ### Meeting Lifecycle
+
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/meetings` | Create a new scheduled or ad-hoc room. Caches sanitized config in Redis. |
@@ -133,14 +135,18 @@ DATABASE_URL="postgresql://loungemesh:loungemesh@postgres:5432/loungemesh?schema
 | `PUT` | `/api/meetings/config/:roomName` | Update room settings (host/moderator only). |
 
 ### Real-Time Session Features (Redis-Backed)
+
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` / `PUT` | `/api/meetings/state/:roomName/whiteboard` | Read or persist collaborative whiteboard vector strokes. |
-| `GET` / `PUT` | `/api/meetings/state/:roomName/notes` | Read or update synchronized shared notes. |
-| `GET` / `PUT` | `/api/meetings/state/:roomName/poll` | Fetch active poll or submit vote/update poll state. |
-| `GET` / `POST` | `/api/meetings/state/:roomName/access/defaults` | Read or update room feature toggles (chat, notes, whiteboard, poll, stage). |
-| `GET` / `POST` | `/api/meetings/state/:roomName/access/grants` | Read or update per-user capability grants. |
-| `GET` / `PUT` / `DELETE` | `/api/meetings/state/:roomName/background` | Get, set, or clear room floorplan background URL. |
+| `GET` | `/api/meetings/state/:roomName/whiteboard` | Read collaborative whiteboard state. |
+| `POST` | `/api/meetings/state/:roomName/whiteboard/stroke` | Add a collaborative whiteboard stroke. |
+| `POST` | `/api/meetings/state/:roomName/whiteboard/clear` | Clear collaborative whiteboard state. |
+| `GET` / `POST` | `/api/meetings/state/:roomName/notes` | Read or update synchronized shared notes. |
+| `GET` / `POST` / `DELETE` | `/api/meetings/state/:roomName/poll` | Fetch, update, or clear active poll state. |
+| `GET` | `/api/meetings/state/:roomName/access` | Read room feature toggles and capability grants. |
+| `POST` | `/api/meetings/state/:roomName/access/defaults` | Update room feature toggles. |
+| `POST` | `/api/meetings/state/:roomName/access/grants` | Update per-user capability grants. |
+| `GET` / `POST` / `DELETE` | `/api/meetings/state/:roomName/background` | Get, set, or clear room floorplan background URL. |
 | `POST` | `/api/meetings/log/:roomName` | Record an audit log event in `SessionLog`. |
 
 ---

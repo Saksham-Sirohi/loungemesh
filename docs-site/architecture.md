@@ -43,18 +43,19 @@ flowchart TD
   end
 
   %% Authentication & Token Flow
-  Plugin -->|Opaque token in URL| AccessGuard
-  AccessGuard -->|POST /token| PluginAPI
-  PluginAPI -->|Jitsi JWT| AccessGuard
-  AccessGuard -->|JWT| Composable
+  Plugin -->|Signed grant / token in URL| AccessGuard
+  AccessGuard -->|Exchange grant or token| PluginAPI
+  PluginAPI -->|Short-lived Jitsi JWT & capabilities| AccessGuard
+  AccessGuard -->|JWT & capabilities| Composable
 
   %% Frontend Internal Wiring
   Pages --> Stores
   Pages --> Composable
   Pages --> Bridge
+  Stores -->|buildReceiverConstraints| Constraints
+  Constraints -->|ReceiverConstraints| Composable
   Composable --> MediaService
   Composable --> Worker
-  Composable --> Constraints
   MediaService --> JitsiAdapter
   JitsiAdapter --> AudioCtx
   JitsiAdapter --> LibJitsi
@@ -121,7 +122,7 @@ Avatar coordinates on the 2D floorplan are processed by a dedicated Web Worker (
 | `src-vue/utils/receiverConstraints.ts` | Viewport culling and Jitsi receiver constraints calculator |
 | `src-vue/composables/useMediaEngine.ts` | Media engine singleton coordinator and track lifecycle manager |
 | `src-vue/composables/useAccessGuard.ts` | Eventyay token exchange and access control gatekeeper |
-| `src-vue/composables/useEventyayBridge.ts` | Bidirectional postMessage bridge for iframe embedding |
+| `src-vue/composables/useEventyayBridge.ts` | postMessage bridge for parent event portal integration (e.g. embedding the LoungeMesh SPA within Eventyay; media rendering itself remains strictly headless without Jitsi iframes) |
 | `src-vue/stores/localStore.ts` | Local user position, mic/camera mute states, and audio settings |
 | `src-vue/stores/conferenceStore.ts` | Remote participant track registry and connection status |
 | `src-vue/stores/sessionFeaturesStore.ts` | Whiteboard, shared notes, live polls, stage, and permission state |

@@ -28,7 +28,6 @@ All deployment workflows are consolidated into `scripts/loungemesh.sh`. Never wr
 # 3. First-time server bootstrap
 ./scripts/loungemesh.sh bootstrap \
   --app-host=loungemesh.example.com \
-  --jitsi-host=jitsi.example.com \
   --email=admin@example.com \
   --deploy
 

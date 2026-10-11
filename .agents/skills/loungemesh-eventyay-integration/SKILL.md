@@ -107,5 +107,5 @@ When writing unit or integration tests for Eventyay flows:
     }),
   });
   ```
-- Verify both success redirects to `/session/<roomName>` and failure redirects to `/denied`.
+- Verify both success redirects to `/session/<roomName>` and failure handling rendering the inline access denied state.
 - Maintain 100% test coverage across `src-vue/composables/useAccessGuard.ts` and `src-vue/composables/useEventyayBridge.ts`.
