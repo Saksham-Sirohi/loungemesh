@@ -863,15 +863,15 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
               this.isInvited = !!data.role.isInvited;
               if (data.role.hostId) {
                 this.hostId = data.role.hostId;
+                this.meetingExists = true;
+              } else {
+                this.meetingExists = false;
               }
               if (data.config) {
-                this.meetingExists = true;
                 this.allowParticipantRecording = !!data.config.allowParticipantRecording;
                 this.lobbyEnabled = !!data.config.lobbyEnabled;
                 this.stagePromotionEnabled = !!data.config.stagePromotionEnabled;
                 this.notesTemplate = data.config.notesTemplate || '';
-              } else {
-                this.meetingExists = false;
               }
               if (data.whiteboard) {
                 this.whiteboardStrokes = data.whiteboard.strokes || [];

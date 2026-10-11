@@ -32,6 +32,14 @@ describe('ScreenshareButton', () => {
       expect.objectContaining({
         devices: ['desktop'],
         desktopSharingSources: ['screen', 'window', 'tab'],
+        desktopSharingFrameRate: { min: 15, max: 30 },
+        constraints: {
+          video: {
+            height: { ideal: 720, max: 720 },
+            width: { ideal: 1280, max: 1280 },
+            frameRate: { ideal: 24, max: 30 },
+          },
+        },
         firePermissionPromptIsShownEvent: true,
       }),
     );
