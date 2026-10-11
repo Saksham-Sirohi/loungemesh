@@ -1159,4 +1159,104 @@ export async function clearBackgroundState(req: Request, res: Response) {
   }
 }
 
+export async function getRoomInitialState(req: Request, res: Response) {
+  const roomName = req.params.roomName as string;
+  try {
+    const meetingPromise = prisma.meeting.findUnique({
+      where: { roomName },
+      include: { configs: true },
+    });
+
+    const wbPromise = redisClient.get(`meeting:state:${roomName}:whiteboard`);
+    const notesPromise = redisClient.get(`meeting:state:${roomName}:notes`);
+    const accessPromise = redisClient.get(`meeting:state:${roomName}:access`);
+    const pollPromise = redisClient.get(`meeting:state:${roomName}:poll`);
+    const bgPromise = redisClient.get(`meeting:state:${roomName}:background`);
+
+    const [meeting, rawWb, rawNotes, rawAccess, rawPoll, rawBg] = await Promise.all([
+      meetingPromise,
+      wbPromise,
+      notesPromise,
+      accessPromise,
+      pollPromise,
+      bgPromise,
+    ]);
+
+    let role: 'host' | 'moderator' | 'attendee' = 'attendee';
+    const hostId: string | null = meeting ? meeting.hostId : null;
+    let isInvited = false;
+
+    if (meeting) {
+      if (meeting.eventyayEventSlug) {
+        if (req.access && req.access.room === roomName) {
+          role = normalizeRole(req.access.role) as any;
+          isInvited = !req.access.sub?.startsWith('guest:');
+        }
+      } else {
+        role = (await getMeetingRoleForUser(roomName, req.user?.id)) as any;
+        if (req.user?.email) {
+          isInvited =
+            meeting.guestEmails.includes(req.user.email) ||
+            meeting.moderatorEmails.includes(req.user.email);
+        }
+      }
+    }
+
+    const config = meeting?.configs || null;
+    const strokes = rawWb ? JSON.parse(rawWb) : [];
+    let notes = rawNotes;
+    if (notes === null) {
+      notes = meeting?.configs?.sharedNotes || '';
+    }
+
+    let access: any = null;
+    if (rawAccess) {
+      access = JSON.parse(rawAccess);
+      if (!access.enabledFeatures) {
+        access.enabledFeatures = { ...DEFAULT_ENABLED_FEATURES };
+      }
+    } else {
+      let defaults = null;
+      let enabledFeatures = { ...DEFAULT_ENABLED_FEATURES };
+      if (meeting?.configs?.roomDefaults) {
+        try {
+          const parsedDefaults = JSON.parse(meeting.configs.roomDefaults);
+          if (parsedDefaults?.enabledFeatures) {
+            enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...parsedDefaults.enabledFeatures };
+            defaults = parsedDefaults.defaults ?? null;
+          } else {
+            defaults = parsedDefaults;
+          }
+        } catch {
+          defaults = null;
+        }
+      }
+      const grants = meeting?.configs?.userGrants ? JSON.parse(meeting.configs.userGrants) : {};
+      access = { defaults, grants, enabledFeatures };
+    }
+
+    const poll = rawPoll
+      ? JSON.parse(rawPoll)
+      : meeting?.configs?.activePoll
+      ? JSON.parse(meeting.configs.activePoll)
+      : null;
+
+    const gridBackgroundUrl =
+      rawBg !== null ? rawBg : meeting?.configs?.gridBackgroundUrl || '';
+
+    return res.json({
+      role: { role, hostId, isInvited },
+      config,
+      whiteboard: { strokes },
+      notes: { notes },
+      access,
+      poll: { poll },
+      background: { gridBackgroundUrl },
+    });
+  } catch (err) {
+    console.error('getRoomInitialState error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 

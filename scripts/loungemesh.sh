@@ -323,6 +323,29 @@ patch_jitsi_nginx() {
   fi
 }
 
+patch_prosody_limits() {
+  local prosody_conf="docker/jitsi-config/prosody/config/prosody.cfg.lua"
+  local jitsi_conf="docker/jitsi-config/prosody/config/conf.d/jitsi-meet.cfg.lua"
+  [[ -f "$prosody_conf" ]] || return 0
+  $SUDO node -e '
+    const fs = require("fs");
+    const pPath = process.argv[1];
+    if (fs.existsSync(pPath)) {
+      let content = fs.readFileSync(pPath, "utf8");
+      if (content.includes("rate = \"10kb/s\";")) {
+        fs.writeFileSync(pPath, content.replace(/rate\s*=\s*"10kb\/s";/, "rate = \"128kb/s\";"));
+      }
+    }
+    const jPath = process.argv[2];
+    if (fs.existsSync(jPath)) {
+      let content = fs.readFileSync(jPath, "utf8");
+      if (content.includes("smacks_max_unacked_stanzas = 5;")) {
+        fs.writeFileSync(jPath, content.replace("smacks_max_unacked_stanzas = 5;", "smacks_max_unacked_stanzas = 25;"));
+      }
+    }
+  ' "$prosody_conf" "$jitsi_conf"
+}
+
 check_ws() {
   local target="$1"; local origin="${2:-}"; local extra=()
   [[ -n "$origin" ]] && extra+=(-H "Origin: $origin")
@@ -557,6 +580,7 @@ cmd_deploy() {
   # Wait for that file, then patch WebSocket headers (gzip off, Connection: upgrade).
   wait_for_jitsi_nginx || true
   patch_jitsi_nginx
+  patch_prosody_limits
 
   echo "==> Waiting for all services to fully initialise..."
   sleep 20

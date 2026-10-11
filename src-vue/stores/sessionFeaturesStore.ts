@@ -852,61 +852,111 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
     async fetchRoomConfigAndRole(roomName: string, engine?: any) {
       this.isFetchingConfig = true;
       try {
-        const [roleRes, configRes, wbRes, notesRes, accessRes, pollRes, bgRes] = await Promise.all([
-          fetch(`/api/meetings/role/${roomName}`),
-          fetch(`/api/meetings/config/${roomName}`),
-          fetch(`/api/meetings/state/${roomName}/whiteboard`),
-          fetch(`/api/meetings/state/${roomName}/notes`),
-          fetch(`/api/meetings/state/${roomName}/access`),
-          fetch(`/api/meetings/state/${roomName}/poll`),
-          fetch(`/api/meetings/state/${roomName}/background`),
-        ]);
+        let initialized = false;
+        try {
+          const initRes = await fetch(`/api/meetings/state/${roomName}/init`);
+          if (initRes.ok) {
+            const data = await initRes.json();
+            if (data && data.role) {
+              this.isVerifiedHost = data.role.role === 'host';
+              this.isVerifiedModerator = data.role.role === 'moderator';
+              this.isInvited = !!data.role.isInvited;
+              if (data.role.hostId) {
+                this.hostId = data.role.hostId;
+              }
+              if (data.config) {
+                this.meetingExists = true;
+                this.allowParticipantRecording = !!data.config.allowParticipantRecording;
+                this.lobbyEnabled = !!data.config.lobbyEnabled;
+                this.stagePromotionEnabled = !!data.config.stagePromotionEnabled;
+                this.notesTemplate = data.config.notesTemplate || '';
+              } else {
+                this.meetingExists = false;
+              }
+              if (data.whiteboard) {
+                this.whiteboardStrokes = data.whiteboard.strokes || [];
+              }
+              if (data.notes) {
+                this.sharedNotes = data.notes.notes || '';
+              }
+              if (data.access) {
+                if (data.access.defaults) this.roomDefaults = data.access.defaults;
+                if (data.access.grants) this.userGrants = data.access.grants;
+                if (data.access.enabledFeatures) {
+                  this.enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...data.access.enabledFeatures };
+                }
+              }
+              if (data.poll && data.poll.poll) {
+                this.activePoll = data.poll.poll;
+                this.syncMyPollVoteFromPoll();
+              }
+              if (data.background) {
+                this.gridBackgroundUrl = data.background.gridBackgroundUrl || '';
+              }
+              initialized = true;
+            }
+          }
+        } catch {
+          /* Fallback to parallel individual endpoints */
+        }
 
-        if (roleRes.ok) {
-          const data = await roleRes.json();
-          this.isVerifiedHost = data.role === 'host';
-          this.isVerifiedModerator = data.role === 'moderator';
-          this.isInvited = !!data.isInvited;
-          if (data.hostId) {
-            this.hostId = data.hostId;
+        if (!initialized) {
+          const [roleRes, configRes, wbRes, notesRes, accessRes, pollRes, bgRes] = await Promise.all([
+            fetch(`/api/meetings/role/${roomName}`),
+            fetch(`/api/meetings/config/${roomName}`),
+            fetch(`/api/meetings/state/${roomName}/whiteboard`),
+            fetch(`/api/meetings/state/${roomName}/notes`),
+            fetch(`/api/meetings/state/${roomName}/access`),
+            fetch(`/api/meetings/state/${roomName}/poll`),
+            fetch(`/api/meetings/state/${roomName}/background`),
+          ]);
+
+          if (roleRes.ok) {
+            const data = await roleRes.json();
+            this.isVerifiedHost = data.role === 'host';
+            this.isVerifiedModerator = data.role === 'moderator';
+            this.isInvited = !!data.isInvited;
+            if (data.hostId) {
+              this.hostId = data.hostId;
+            }
           }
-        }
-        if (configRes.ok) {
-          this.meetingExists = true;
-          const config = await configRes.json();
-          this.allowParticipantRecording = !!config.allowParticipantRecording;
-          this.lobbyEnabled = !!config.lobbyEnabled;
-          this.stagePromotionEnabled = !!config.stagePromotionEnabled;
-          this.notesTemplate = config.notesTemplate || '';
-        } else {
-          this.meetingExists = false;
-        }
-        if (wbRes.ok) {
-          const wbData = await wbRes.json();
-          this.whiteboardStrokes = wbData.strokes || [];
-        }
-        if (notesRes.ok) {
-          const notesData = await notesRes.json();
-          this.sharedNotes = notesData.notes || '';
-        }
-        if (accessRes.ok) {
-          const accessData = await accessRes.json();
-          if (accessData.defaults) this.roomDefaults = accessData.defaults;
-          if (accessData.grants) this.userGrants = accessData.grants;
-          if (accessData.enabledFeatures) {
-            this.enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...accessData.enabledFeatures };
+          if (configRes.ok) {
+            this.meetingExists = true;
+            const config = await configRes.json();
+            this.allowParticipantRecording = !!config.allowParticipantRecording;
+            this.lobbyEnabled = !!config.lobbyEnabled;
+            this.stagePromotionEnabled = !!config.stagePromotionEnabled;
+            this.notesTemplate = config.notesTemplate || '';
+          } else {
+            this.meetingExists = false;
           }
-        }
-        if (pollRes.ok) {
-          const pollData = await pollRes.json();
-          if (pollData.poll) {
-            this.activePoll = pollData.poll;
-            this.syncMyPollVoteFromPoll();
+          if (wbRes.ok) {
+            const wbData = await wbRes.json();
+            this.whiteboardStrokes = wbData.strokes || [];
           }
-        }
-        if (bgRes.ok) {
-          const bgData = await bgRes.json();
-          this.gridBackgroundUrl = bgData.gridBackgroundUrl || '';
+          if (notesRes.ok) {
+            const notesData = await notesRes.json();
+            this.sharedNotes = notesData.notes || '';
+          }
+          if (accessRes.ok) {
+            const accessData = await accessRes.json();
+            if (accessData.defaults) this.roomDefaults = accessData.defaults;
+            if (accessData.grants) this.userGrants = accessData.grants;
+            if (accessData.enabledFeatures) {
+              this.enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...accessData.enabledFeatures };
+            }
+          }
+          if (pollRes.ok) {
+            const pollData = await pollRes.json();
+            if (pollData.poll) {
+              this.activePoll = pollData.poll;
+              this.syncMyPollVoteFromPoll();
+            }
+          }
+          if (bgRes.ok) {
+            const bgData = await bgRes.json();
+            this.gridBackgroundUrl = bgData.gridBackgroundUrl || '';
+          }
         }
       } catch (err) {
         console.error('Failed to fetch room config/role:', err);

@@ -23,6 +23,7 @@ import {
   updateBackgroundState,
   clearBackgroundState,
   getRoleSnapshot,
+  getRoomInitialState,
 } from '../controllers/meetingController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireCapability } from '../integration/access.js';
@@ -70,6 +71,9 @@ router.delete('/state/:roomName/poll', noCache, requireCapability('poll_manage')
 router.get('/state/:roomName/background', noCache, getBackgroundState);
 router.post('/state/:roomName/background', noCache, requireCapability('settings'), updateBackgroundState);
 router.delete('/state/:roomName/background', noCache, requireCapability('settings'), clearBackgroundState);
+
+// Bundled Room Initial State (Ultra-fast single-roundtrip load)
+router.get('/state/:roomName/init', noCache, getRoomInitialState);
 
 export default router;
 
