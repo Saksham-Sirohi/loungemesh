@@ -53,9 +53,9 @@ When developing or modifying features, verify that the following user flows func
 
 ---
 
-## 2. 100% Test Coverage Requirement
+## 2. 100% Test Coverage & Quality Gates
 
-Vitest is configured with `@vitest/coverage-v8` with strict thresholds:
+Vitest is configured with `@vitest/coverage-v8` with strict thresholds across all `src-vue/` code:
 ```js
 coverage: {
   statements: 100,
@@ -65,19 +65,50 @@ coverage: {
 }
 ```
 
-### Testing Rules
-1. **Always run `npm test`** before committing any frontend change.
-2. **Mocking Pinia Stores**:
+### Pre-PR / Pre-Commit Verification Checklist
+Before submitting any pull request or committing code, execute:
+1. **Vitest Unit Test Suite & Coverage**:
+   ```bash
+   npm test
+   ```
+   Must pass across all 159 test files with **100% statement, branch, function, and line coverage**.
+2. **Playwright E2E Integration Tests**:
+   ```bash
+   npm run build && npm run test:e2e
+   ```
+   Ensures critical user flows (room join, stage promotion, whiteboard, notes, polls) function in headless Chromium.
+3. **TypeScript Typecheck**:
+   ```bash
+   npm run typecheck
+   ```
+   Zero errors across `.vue` and `.ts` files.
+4. **Backend TypeScript Build**:
+   ```bash
+   npm --prefix server run build
+   ```
+5. **Documentation Build**:
+   ```bash
+   npm run docs:build
+   ```
+
+### Documentation & Skills Maintenance Workflow
+Whenever adding, updating, or refactoring user flows:
+- **Update All READMEs**: Update the root `README.md`, `server/README.md`, and relevant guides in `docs-site/` (e.g. `docs-site/guide/features.md`).
+- **Update AI Skills**: Update this skill (`loungemesh-features-and-testing`) and any affected domain skills in `.agents/skills/` (such as `loungemesh-eventyay-integration` or `loungemesh-architecture`) so all AI models and human developers have up-to-date user flow contracts and test harnesses.
+
+### Testing Invariants & Best Practices
+1. **Mocking Pinia Stores**:
    ```ts
    beforeEach(() => {
      setActivePinia(createPinia());
    });
    ```
-3. **Mocking WebRTC & Adapter**:
+2. **Mocking WebRTC & Adapter**:
    - Use test helpers in `src-vue/tests/`: `connectAndJoinTestConference()`, `getJitsiTestContext()`, `makeTrack()`.
    - Spy on `getMediaEngineInstance()` for track and constraint calls.
-4. **Mocking Environment Variables**:
+3. **Mocking Environment Variables**:
    - Use `vi.stubEnv('VITE_EVENTYAY_API_BASE', ...)` and `vi.unstubAllEnvs()` in `afterEach`.
-5. **Vue Component Testing**:
+4. **Vue Component Testing**:
    - Use `@vue/test-utils` with `mountWithApp()`.
    - Flush promises (`await flushPromises()`) after triggering reactive store actions or DOM events.
+
