@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db.js';
 import { Capability, EventyayRole, isEventyayRole } from './roles.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-jwt-secret-for-dev';
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('JWT_SECRET must be set in production'); })() : 'fallback-jwt-secret-for-dev');
 export const ACCESS_COOKIE = 'lm_access';
 
 export interface AccessClaims {

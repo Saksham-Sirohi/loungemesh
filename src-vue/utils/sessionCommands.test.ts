@@ -441,13 +441,44 @@ describe('handleSessionCommand', () => {
         }),
       },
     );
-    expect(features.pendingModerationChanges).toHaveLength(1);
-
     handleSessionCommand(
       'mod_change',
       { value: JSON.stringify({ action: 'reject', id: 'mc-2' }) },
     );
     expect(features.pendingModerationChanges).toHaveLength(0);
+
+    // Unauthorized participant attempting to approve or reject is ignored
+    handleSessionCommand(
+      'mod_change',
+      {
+        value: JSON.stringify({
+          action: 'propose',
+          id: 'mc-unauth',
+          type: 'notes',
+          payload: 'pending notes',
+        }),
+      },
+    );
+    expect(features.pendingModerationChanges).toHaveLength(1);
+
+    // Non-moderator tries to approve -> rejected/ignored
+    handleSessionCommand(
+      'mod_change',
+      { value: JSON.stringify({ action: 'approve', id: 'mc-unauth' }) },
+      'guest-attacker',
+    );
+    expect(features.pendingModerationChanges).toHaveLength(1);
+
+    // Non-moderator tries to reject -> rejected/ignored
+    handleSessionCommand(
+      'mod_change',
+      { value: JSON.stringify({ action: 'reject', id: 'mc-unauth' }) },
+      'guest-attacker',
+    );
+    expect(features.pendingModerationChanges).toHaveLength(1);
+
+    // Clean up
+    features.rejectModerationChange('mc-unauth');
 
     // Invalid commands handled gracefully
     handleSessionCommand('mod_change', { value: 'not-json' });

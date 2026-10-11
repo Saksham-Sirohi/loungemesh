@@ -89,7 +89,9 @@ export async function exchangeGrant(req: Request, res: Response) {
       include: { configs: true },
     });
     if (!meeting) {
-      let host = await prisma.user.findFirst();
+      let host = await prisma.user.findUnique({
+        where: { email: 'integration@eventyay.com' },
+      });
       if (!host) {
         host = await prisma.user.create({
           data: {
@@ -147,15 +149,20 @@ export async function exchangeGrant(req: Request, res: Response) {
 
     // Single-user unique attendee grant enforcement:
     // One-time use. A reload by the same participant reuses the access cookie instead of the grant.
-    try {
-      await prisma.eventyayGrantUse.create({
-        data: { jti: grant.jti, expiresAt: new Date(grant.exp * 1000) },
-      });
-    } catch {
-      return res.status(409).json({
-        error: 'single_user_replayed',
-        message: 'This unique attendee link has already been used by another participant. Attendee links only allow one user.',
-      });
+    if (grant.singleUser) {
+      try {
+        await prisma.eventyayGrantUse.create({
+          data: { jti: grant.jti, expiresAt: new Date(grant.exp * 1000) },
+        });
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          return res.status(409).json({
+            error: 'single_user_replayed',
+            message: 'This unique attendee link has already been used by another participant. Attendee links only allow one user.',
+          });
+        }
+        throw err;
+      }
     }
 
     let defaults = null;

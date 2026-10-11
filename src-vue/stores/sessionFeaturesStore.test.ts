@@ -854,7 +854,7 @@ describe('sessionFeaturesStore', () => {
     features.clearAllModerationTimers();
     expect(features.pendingModerationChanges).toHaveLength(0);
 
-    // resetForLeave also clears timers
+    // resetForLeave also clears timers and Eventyay state
     features.addModerationChange({
       id: 'mc-wb-4',
       type: 'whiteboard',
@@ -863,8 +863,16 @@ describe('sessionFeaturesStore', () => {
       payload: stroke,
       timestamp: Date.now(),
     });
+    features.setIntegrationAccess('moderator', ['moderate']);
+    expect(features.eventyayMeet).toBe(true);
+    expect(features.capabilities).toEqual(['moderate']);
+
     features.resetForLeave();
     expect(features.pendingModerationChanges).toHaveLength(0);
+    expect(features.eventyayMeet).toBe(false);
+    expect(features.eventyayRole).toBe('');
+    expect(features.capabilities).toEqual([]);
+    expect(features.isInvited).toBe(false);
 
     vi.useRealTimers();
   });
