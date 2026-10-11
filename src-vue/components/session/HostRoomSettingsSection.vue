@@ -78,6 +78,41 @@ function clearTemplate() {
   templateError.value = '';
   features.clearNotesTemplate();
 }
+
+import type { GatedFeatureKey } from '@/utils/featureAccess';
+import { computed } from 'vue';
+
+const availableFeatures: Array<{ key: GatedFeatureKey; label: string }> = [
+  { key: 'chat', label: 'Public Chat' },
+  { key: 'notes', label: 'Shared Notes' },
+  { key: 'whiteboard', label: 'Whiteboard' },
+  { key: 'poll', label: 'Polls' },
+  { key: 'stage', label: 'Stage Spotlight' },
+];
+
+const confirmingFeature = ref<GatedFeatureKey | null>(null);
+const targetState = ref(false);
+
+const confirmingFeatureLabel = computed(() => {
+  /* v8 ignore next */
+  return availableFeatures.find((f) => f.key === confirmingFeature.value)?.label || '';
+});
+
+function promptToggleFeature(key: GatedFeatureKey) {
+  confirmingFeature.value = key;
+  targetState.value = features.enabledFeatures[key] === false;
+}
+
+function cancelConfirmFeature() {
+  confirmingFeature.value = null;
+}
+
+function applyConfirmedFeature() {
+  /* v8 ignore next */
+  if (!confirmingFeature.value) return;
+  features.setFeatureEnabled(confirmingFeature.value, targetState.value, engine);
+  confirmingFeature.value = null;
+}
 </script>
 
 <template>
@@ -133,8 +168,45 @@ function clearTemplate() {
         Remove
       </button>
     </div>
-    <p v-if="features.notesTemplate" class="templateStatus">Template loaded — pre-fills notes when the session starts.</p>
+    <p v-if="features.notesTemplate" class="templateStatus">Template active</p>
     <p v-if="templateError" class="error">{{ templateError }}</p>
+
+    <h3 class="sectionTitle sectionTitleSpaced">Room features</h3>
+    <p class="sectionHint">Control which features are enabled room-wide. Disabled features are hidden from participants and cannot be used or moderated.</p>
+    <div class="featuresList">
+      <div v-for="feat in availableFeatures" :key="feat.key" class="featureRow">
+        <div class="featureInfo">
+          <span class="featureName">{{ feat.label }}</span>
+          <span
+            class="featureBadge"
+            :class="features.enabledFeatures[feat.key] !== false ? 'enabledBadge' : 'disabledBadge'"
+          >
+            {{ features.enabledFeatures[feat.key] !== false ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <button
+          type="button"
+          class="pill featureToggleBtn"
+          :class="features.enabledFeatures[feat.key] !== false ? 'warn' : 'primary'"
+          @click="promptToggleFeature(feat.key)"
+        >
+          {{ features.enabledFeatures[feat.key] !== false ? 'Disable' : 'Enable' }}
+        </button>
+      </div>
+    </div>
+
+    <div v-if="confirmingFeature" class="confirmModalOverlay" role="dialog" aria-modal="true">
+      <div class="confirmModalCard">
+        <h4 class="confirmModalTitle">Confirm Feature Change</h4>
+        <p class="confirmModalText">
+          Are you sure you want to {{ targetState ? 'enable' : 'disable' }} <strong>{{ confirmingFeatureLabel }}</strong> for all participants?
+        </p>
+        <div class="confirmModalActions">
+          <button type="button" class="pill cancelConfirmBtn" @click="cancelConfirmFeature">Cancel</button>
+          <button type="button" class="pill warn applyConfirmBtn" @click="applyConfirmedFeature">Confirm</button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -215,5 +287,95 @@ function clearTemplate() {
   margin: 0 0 10px;
   font-size: var(--fs-small);
   color: var(--color-mono30);
+}
+.featuresList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.featureRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--color-mono95);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-light);
+}
+.featureInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.featureName {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-default);
+}
+.featureBadge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-round);
+  font-weight: var(--fw-medium);
+}
+.enabledBadge {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+.disabledBadge {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+.featureToggleBtn {
+  font-size: var(--fs-small);
+  padding: 3px 10px;
+}
+.featureToggleBtn.primary {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+.featureToggleBtn.warn {
+  background: var(--btn-warning-bg);
+  color: var(--btn-warning-fg);
+}
+.confirmModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10050;
+}
+.confirmModalCard {
+  background: var(--color-bg-card);
+  padding: 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-light);
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.confirmModalTitle {
+  margin: 0 0 8px;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-default);
+}
+.confirmModalText {
+  margin: 0 0 16px;
+  font-size: var(--fs-small);
+  color: var(--color-text-default);
+}
+.confirmModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.cancelConfirmBtn {
+  background: var(--btn-default-bg);
+  color: var(--color-text-default);
+  border: 1px solid var(--line-light);
 }
 </style>

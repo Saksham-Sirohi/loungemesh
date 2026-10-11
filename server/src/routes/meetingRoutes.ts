@@ -22,6 +22,7 @@ import {
   getBackgroundState,
   updateBackgroundState,
   clearBackgroundState,
+  getRoleSnapshot,
 } from '../controllers/meetingController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireCapability } from '../integration/access.js';
@@ -43,6 +44,7 @@ router.delete('/:id', requireAuth, cancelMeeting);
 
 // Configurations & Live roles
 router.get('/role/:roomName', noCache, getMeetingRole);
+router.get('/role-snapshot/:roomName', noCache, getRoleSnapshot);
 router.get('/config/:roomName', noCache, getMeetingConfig);
 router.put('/config/:roomName', noCache, requireCapability('settings'), updateMeetingConfig);
 

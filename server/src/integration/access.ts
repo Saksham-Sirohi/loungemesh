@@ -48,10 +48,33 @@ export function parseAccessSession(req: Request, _res: Response, next: NextFunct
  *    caps (settings, moderate, poll_manage) are left to the existing controller
  *    host/moderator checks.
  */
+import { redisClient } from '../config/redis.js';
+
 export function requireCapability(cap: Capability, opts: { standaloneOpen?: boolean } = {}) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const roomName = (req.params.roomName as string) || '';
     try {
+      // 1. Check if the capability corresponds to a feature disabled by the host
+      const featureMap: Record<string, string> = {
+        whiteboard: 'whiteboard',
+        notes: 'notes',
+        poll_manage: 'poll',
+      };
+      const feature = featureMap[cap];
+      if (feature && roomName) {
+        try {
+          const raw = await redisClient.get(`meeting:state:${roomName}:access`);
+          if (raw) {
+            const access = JSON.parse(raw);
+            if (access?.enabledFeatures && access.enabledFeatures[feature] === false) {
+              return res.status(403).json({ error: 'feature_disabled', feature });
+            }
+          }
+        } catch (e) {
+          console.warn('Error reading feature enablement cache:', e);
+        }
+      }
+
       const meeting = roomName
         ? await prisma.meeting.findUnique({ where: { roomName }, select: { eventyayEventSlug: true } })
         : null;
