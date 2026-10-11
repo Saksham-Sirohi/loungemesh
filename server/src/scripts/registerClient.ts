@@ -4,7 +4,11 @@ import { sha256 } from '../oauth/crypto.js';
 async function main() {
   const args = process.argv.slice(2);
   const clientId = args[0] || process.env.EVENTYAY_OAUTH_CLIENT_ID || 'eventyay';
-  const clientSecret = args[1] || process.env.EVENTYAY_OAUTH_CLIENT_SECRET || process.env.EVENTYAY_SERVICE_SECRET || '9f53a6cabe817870266f7f03422864b302d1bd021b448e7b3f6cbf70361337c5';
+  const clientSecret = args[1] || process.env.EVENTYAY_OAUTH_CLIENT_SECRET || process.env.EVENTYAY_SERVICE_SECRET;
+  if (!clientSecret) {
+    console.error('Error: EVENTYAY_OAUTH_CLIENT_SECRET or EVENTYAY_SERVICE_SECRET must be provided as an argument or environment variable.');
+    process.exit(1);
+  }
   const name = args[2] || 'Eventyay';
   const defaultUris = [
     'http://localhost:8000/control/admin/video/loungemesh/oauth/callback/',

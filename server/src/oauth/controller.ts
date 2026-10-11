@@ -162,11 +162,14 @@ export async function token(req: Request, res: Response) {
       return res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE verification failed' });
     }
 
-    // Mark code as used
-    await prisma.oAuthCode.update({
-      where: { code: codeHash },
+    // Mark code as used atomically to prevent race condition
+    const claimed = await prisma.oAuthCode.updateMany({
+      where: { code: codeHash, used: false, expiresAt: { gt: new Date() } },
       data: { used: true },
     });
+    if (claimed.count !== 1) {
+      return res.status(400).json({ error: 'invalid_grant', error_description: 'Code is invalid or expired' });
+    }
 
     // Issue tokens
     const rawAccessToken = randomToken(32);
@@ -206,20 +209,23 @@ export async function token(req: Request, res: Response) {
       return res.status(400).json({ error: 'invalid_grant', error_description: 'Invalid refresh token' });
     }
 
-    // Issue new tokens & rotate
+    // Issue new tokens & rotate atomically
     const rawAccessToken = randomToken(32);
     const rawRefreshToken = randomToken(32);
     const accessHash = sha256(rawAccessToken);
     const newRefreshHash = sha256(rawRefreshToken);
 
-    await prisma.oAuthToken.update({
-      where: { id: tokenRecord.id },
+    const rotated = await prisma.oAuthToken.updateMany({
+      where: { id: tokenRecord.id, refreshHash },
       data: {
         accessHash,
         refreshHash: newRefreshHash,
         expiresAt: new Date(Date.now() + ACCESS_TTL_SECONDS * 1000),
       },
     });
+    if (rotated.count !== 1) {
+      return res.status(400).json({ error: 'invalid_grant', error_description: 'Refresh token already rotated or invalid' });
+    }
 
     return res.json({
       access_token: rawAccessToken,

@@ -321,8 +321,10 @@ export function handleSessionCommand(name: string, payload: CommandPayload, send
           timestamp: data.timestamp || 0,
         }, getMediaEngineInstance());
       } else if (data.action === 'approve') {
+        if (senderId && !isSenderModeratorOrHost(senderId, features)) break;
         features.approveModerationChange(data.id, undefined, true);
       } else {
+        if (senderId && !isSenderModeratorOrHost(senderId, features)) break;
         features.rejectModerationChange(data.id);
       }
       break;

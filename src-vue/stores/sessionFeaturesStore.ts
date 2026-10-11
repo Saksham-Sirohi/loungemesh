@@ -641,6 +641,10 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
       this.meetingExists = false;
       this.configLoaded = false;
       this.isFetchingConfig = false;
+      this.eventyayMeet = false;
+      this.eventyayRole = '';
+      this.capabilities = [];
+      this.isInvited = false;
       this.clearAllModerationTimers();
     },
     addModerationChange(change: Omit<ModerationChange, 'autoApproveTimer'>, engine?: any) {

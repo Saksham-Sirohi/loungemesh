@@ -17,7 +17,7 @@ const meet = ref<{
 
 onMounted(async () => {
   try {
-    const res = await fetch(`/api/public/meets/${eventSlug}/${roomId}`);
+    const res = await fetch(`/api/public/meets/${encodeURIComponent(eventSlug)}/${encodeURIComponent(roomId)}`);
     if (res.ok) {
       meet.value = await res.json();
     } else if (res.status === 404) {
@@ -71,7 +71,7 @@ onMounted(async () => {
         <div class="actions">
           <a
             class="join-btn"
-            :href="`https://eventyay.com/e/${eventSlug}`"
+            :href="`https://eventyay.com/e/${encodeURIComponent(eventSlug)}`"
             target="_blank"
             rel="noopener noreferrer"
           >
