@@ -234,12 +234,20 @@ watch(
     if (chatReady()) chatError.value = '';
   },
 );
+watch(
+  () => features.canUseChat,
+  (canChat) => {
+    if (!canChat && open.value) {
+      open.value = false;
+    }
+  },
+);
 
 defineExpose({ open, deleteMessage });
 </script>
 
 <template>
-  <div class="wrap">
+  <div v-if="features.canUseChat" class="wrap">
     <MenuCard
       v-if="open"
       title="Chat"

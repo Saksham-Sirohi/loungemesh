@@ -34,6 +34,7 @@ import {
 import { waitForMediaElementDetach } from '@/utils/clearMediaElement';
 import { mediaDebug } from '@/utils/mediaDebug';
 import { unlockMediaPlaybackNow } from '@/utils/resumeMediaPlayback';
+import { getOrCreateSessionUserKey } from '@/utils/userKey';
 import { useConferenceStore } from './conferenceStore';
 import { useSessionFeaturesStore } from './sessionFeaturesStore';
 
@@ -83,6 +84,7 @@ export type LocalState = {
   audioError: boolean;
   videoError: boolean;
   privateNotes: string;
+  userKey: string;
 };
 
 export const useLocalStore = defineStore('local', {
@@ -90,6 +92,7 @@ export const useLocalStore = defineStore('local', {
     const { pos, pan, scale, roomBounds } = initialLocalViewport();
     return {
     id: '',
+    userKey: getOrCreateSessionUserKey(),
     mute: false,
     cameraOff: false,
     speaking: false,

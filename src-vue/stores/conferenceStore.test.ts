@@ -202,8 +202,9 @@ describe('conferenceStore', () => {
   it('addUser refreshes display name when user already exists', () => {
     const store = useConferenceStore();
     store.addUser('u2', { _displayName: 'Alice' });
-    store.addUser('u2', { _displayName: 'Carol' });
+    store.addUser('u2', { _displayName: 'Carol' }, 'uk_readded');
     expect(store.users.u2.user?._displayName).toBe('Carol');
+    expect(store.users.u2.userKey).toBe('uk_readded');
     expect(Object.keys(store.users)).toHaveLength(1);
   });
 
@@ -286,5 +287,50 @@ describe('conferenceStore', () => {
 
     store.removeChatMessage('non-existent');
     expect(store.messages).toHaveLength(1);
+  });
+
+  it('deduplicates users by session userKey', () => {
+    const store = useConferenceStore();
+    store.dedupeUserByKey('new_u', '');
+    store.addUser('old_u', { _displayName: 'Bob' }, 'uk_123');
+    expect(store.users['old_u']).toBeDefined();
+
+    store.dedupeUserByKey('new_u', 'uk_999');
+    expect(store.users['old_u']).toBeDefined();
+
+    store.dedupeUserByKey('new_u', 'uk_123');
+    expect(store.users['old_u']).toBeUndefined();
+  });
+
+  it('records user heartbeats', () => {
+    const store = useConferenceStore();
+    store.addUser('u_hb');
+    const before = store.users['u_hb'].lastSeen ?? 0;
+    store.recordUserHeartbeat('non_existent');
+    store.recordUserHeartbeat('u_hb');
+    expect(store.users['u_hb'].lastSeen).toBeGreaterThanOrEqual(before);
+  });
+
+  it('reconciles users against live participant list', () => {
+    const store = useConferenceStore();
+    store.addUser('u_live');
+    store.addUser('u_dead');
+    store.reconcileUsers(['u_live']);
+    expect(store.users['u_live']).toBeDefined();
+    expect(store.users['u_dead']).toBeUndefined();
+    store.reconcileUsers(['u_live']);
+    expect(store.users['u_live']).toBeDefined();
+  });
+
+  it('prunes stale users past the heartbeat timeout', () => {
+    const store = useConferenceStore();
+    store.addUser('u_fresh');
+    store.addUser('u_stale');
+    store.users['u_stale'].lastSeen = Date.now() - 60000;
+    store.pruneStaleUsers(30000);
+    expect(store.users['u_fresh']).toBeDefined();
+    expect(store.users['u_stale']).toBeUndefined();
+    store.pruneStaleUsers(30000);
+    expect(store.users['u_fresh']).toBeDefined();
   });
 });

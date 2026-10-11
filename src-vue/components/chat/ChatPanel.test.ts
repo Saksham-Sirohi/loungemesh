@@ -819,4 +819,24 @@ describe('ChatPanel', () => {
 
     modWrapper.unmount();
   });
+
+  it('closes and hides when chat feature is disabled', async () => {
+    const features = useSessionFeaturesStore();
+    const { wrapper } = await mountWithApp(ChatPanel);
+    const trigger = wrapper.find('button.ibtn');
+    await trigger.trigger('click');
+    expect(wrapper.find('.chatCard').exists()).toBe(true);
+
+    features.enabledFeatures.chat = false;
+    await nextTick();
+    expect(wrapper.find('.wrap').exists()).toBe(false);
+
+    // when open is already false and canUseChat turns false, watcher is a no-op
+    features.enabledFeatures.chat = true;
+    await nextTick();
+    features.enabledFeatures.chat = false;
+    await nextTick();
+
+    wrapper.unmount();
+  });
 });
