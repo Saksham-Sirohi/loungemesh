@@ -25,6 +25,7 @@ const ICON_NAMES: IconName[] = [
   'video',
   'video-off',
   'volume-x',
+  'send',
 ];
 
 describe('AppIcon', () => {
