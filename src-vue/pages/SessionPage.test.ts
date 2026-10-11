@@ -827,9 +827,9 @@ describe('SessionPage', () => {
     expect(cmdSpy).toHaveBeenCalledWith('lobby', expect.stringContaining('"id":"guest-1"'));
     expect(cmdSpy).toHaveBeenCalledWith('lobby', expect.stringContaining('"id":"guest-2"'));
 
-    // Test banner deny
+    // Test banner deny with fallback name
     features.lobbyWaiting = [
-      { id: 'guest-1', name: 'Bob' },
+      { id: 'guest-1', name: '' },
     ];
     await flushPromises();
 
