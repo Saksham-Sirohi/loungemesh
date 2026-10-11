@@ -70,7 +70,7 @@ Environment variables are configured in `.env` (copied from `env.example` by `np
 | `VITE_JITSI_PUBLIC_URL` | Public URL for Jitsi WebRTC signaling |
 | `VITE_XMPP_DOMAIN` | XMPP signaling domain (default: `meet.jitsi`) |
 | `VITE_EVENTYAY_JWT_ENDPOINT` | Configured Eventyay endpoint used to exchange the `?token=` parameter for a signed Jitsi JWT |
-| `VITE_EVENTYAY_API_BASE` | Optional Eventyay base API URL for ticket/event queries |
+| `VITE_EVENTYAY_API_BASE` | Optional Eventyay API base URL for room wallpapers and access gating |
 
 ### Backend API & Database Variables
 | Variable | Purpose |
