@@ -863,10 +863,8 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
               this.isInvited = !!data.role.isInvited;
               if (data.role.hostId) {
                 this.hostId = data.role.hostId;
-                this.meetingExists = true;
-              } else {
-                this.meetingExists = false;
               }
+              this.meetingExists = !!data.role.hostId;
               if (data.config) {
                 this.allowParticipantRecording = !!data.config.allowParticipantRecording;
                 this.lobbyEnabled = !!data.config.lobbyEnabled;

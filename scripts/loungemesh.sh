@@ -323,10 +323,25 @@ patch_jitsi_nginx() {
   fi
 }
 
+wait_for_prosody_config() {
+  local prosody_conf="docker/jitsi-config/prosody/config/prosody.cfg.lua"
+  local jitsi_conf="docker/jitsi-config/prosody/config/conf.d/jitsi-meet.cfg.lua"
+  echo "==> Waiting for Prosody configuration to generate..."
+  for _ in $(seq 1 45); do
+    if [[ -f "$prosody_conf" && -f "$jitsi_conf" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "WARN: Prosody configuration was not generated in time — prosody patch skipped" >&2
+  return 1
+}
+
 patch_prosody_limits() {
   local prosody_conf="docker/jitsi-config/prosody/config/prosody.cfg.lua"
   local jitsi_conf="docker/jitsi-config/prosody/config/conf.d/jitsi-meet.cfg.lua"
-  [[ -f "$prosody_conf" ]] || return 0
+  [[ -f "$prosody_conf" && -f "$jitsi_conf" ]] || return 0
+  echo "==> Patching Prosody rate limits and stanza buffer"
   $SUDO node -e '
     const fs = require("fs");
     const pPath = process.argv[1];
@@ -585,6 +600,7 @@ cmd_deploy() {
   # Wait for that file, then patch WebSocket headers (gzip off, Connection: upgrade).
   wait_for_jitsi_nginx || true
   patch_jitsi_nginx
+  wait_for_prosody_config || true
   patch_prosody_limits
 
   echo "==> Waiting for all services to fully initialise..."
