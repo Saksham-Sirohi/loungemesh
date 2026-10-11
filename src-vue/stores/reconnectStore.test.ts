@@ -115,17 +115,22 @@ describe('reconnectStore', () => {
     expect(store.isIntentionalLeave).toBe(true);
   });
 
-  it('ignores duplicate onConnectionLost calls while waiting or attempting', () => {
+  it('ignores duplicate onConnectionLost calls while waiting and advances when attempting fails', () => {
     const store = useReconnectStore();
     store.onConnectionLost('first');
     expect(store.attempt).toBe(1);
 
+    // Duplicate while waiting is ignored
     store.onConnectionLost('second');
     expect(store.attempt).toBe(1);
+    expect(store.phase).toBe('waiting');
 
+    // Failure while attempting transitions to next attempt
     store.phase = 'attempting';
     store.onConnectionLost('third');
-    expect(store.attempt).toBe(1);
+    expect(store.attempt).toBe(2);
+    expect(store.phase).toBe('waiting');
+    expect(store.secondsLeft).toBe(15);
   });
 
   it('handles retryNow() when waiting', () => {

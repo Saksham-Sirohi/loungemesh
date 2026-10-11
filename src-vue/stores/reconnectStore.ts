@@ -59,7 +59,7 @@ export const useReconnectStore = defineStore('reconnect', {
 
     onConnectionLost(reason = 'connection_lost') {
       if (this.isIntentionalLeave) return;
-      if (this.phase === 'waiting' || this.phase === 'attempting') return;
+      if (this.phase === 'waiting') return;
 
       this.lastReason = reason;
       this.clearTimers();

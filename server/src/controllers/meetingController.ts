@@ -979,7 +979,7 @@ export async function getRoleSnapshot(req: Request, res: Response) {
   try {
     const meeting = await prisma.meeting.findUnique({
       where: { roomName },
-      select: { hostId: true, eventyayEventSlug: true },
+      select: { hostId: true, eventyayEventSlug: true, configs: true },
     });
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });
@@ -1002,6 +1002,13 @@ export async function getRoleSnapshot(req: Request, res: Response) {
       try {
         const parsed = JSON.parse(raw);
         if (parsed.enabledFeatures) {
+          enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...parsed.enabledFeatures };
+        }
+      } catch {}
+    } else if (meeting.configs?.roomDefaults) {
+      try {
+        const parsed = JSON.parse(meeting.configs.roomDefaults);
+        if (parsed?.enabledFeatures) {
           enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...parsed.enabledFeatures };
         }
       } catch {}

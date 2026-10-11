@@ -839,18 +839,21 @@ describe('wireStoreSync', () => {
       'hello',
       expect.stringContaining('"id":"local-1"'),
     );
-    expect(pruneSpy).toHaveBeenCalledWith(45000);
+    expect(pruneSpy).toHaveBeenCalledWith(45000, expect.any(Array));
 
     // test tick when isJoined is false
     const joinedSpy = vi.spyOn(engine, 'isJoined').mockReturnValue(false);
     vi.advanceTimersByTime(5000);
     joinedSpy.mockRestore();
 
-    // test tick when myId is empty
+    // test tick when myId is empty and getConference is null
     local.setMyID('');
     const idSpy = vi.spyOn(engine, 'getLocalUserId').mockReturnValue('');
+    const confSpy = vi.spyOn(engine, 'getConference').mockReturnValue(null as any);
     vi.advanceTimersByTime(5000);
+    expect(pruneSpy).toHaveBeenCalledWith(45000, []);
     idSpy.mockRestore();
+    confSpy.mockRestore();
     local.setMyID('local-1');
 
     // connectionFailed clears active timer

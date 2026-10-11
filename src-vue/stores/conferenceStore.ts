@@ -138,12 +138,13 @@ export const useConferenceStore = defineStore('conference', {
         this.commitUsers(next);
       }
     },
-    pruneStaleUsers(timeoutMs = 45000) {
+    pruneStaleUsers(timeoutMs = 45000, preserveIds: string[] = []) {
       const now = Date.now();
+      const preserveSet = new Set(preserveIds);
       let changed = false;
       const next = { ...this.users };
       for (const [id, user] of Object.entries(this.users)) {
-        if (user.lastSeen && now - user.lastSeen > timeoutMs) {
+        if (!preserveSet.has(id) && user.lastSeen && now - user.lastSeen > timeoutMs) {
           delete next[id];
           changed = true;
         }

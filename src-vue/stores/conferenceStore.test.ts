@@ -332,5 +332,10 @@ describe('conferenceStore', () => {
     expect(store.users['u_stale']).toBeUndefined();
     store.pruneStaleUsers(30000);
     expect(store.users['u_fresh']).toBeDefined();
+
+    store.addUser('u_stale_preserved');
+    store.users['u_stale_preserved'].lastSeen = Date.now() - 60000;
+    store.pruneStaleUsers(30000, ['u_stale_preserved']);
+    expect(store.users['u_stale_preserved']).toBeDefined();
   });
 });
