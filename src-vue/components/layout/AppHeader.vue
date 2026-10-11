@@ -45,9 +45,12 @@ function handleProfileClick() {
     </div>
   </header>
   
-  <div v-else class="sessionBrand">
-    <img :src="logo" alt="" class="logoMark" width="36" height="36" />
-    <span class="brandWord">LoungeMesh</span>
+  <div v-else class="sessionBrand" data-testid="session-brand">
+    <div class="brandGroup">
+      <img :src="logo" alt="" class="logoMark" width="22" height="22" />
+      <span class="brandWord">LoungeMesh</span>
+    </div>
+    <span class="brandDivider" aria-hidden="true" />
     <div class="headerRoleBadge" :class="`role-${features.userRole}`" data-testid="header-role-badge">
       <span v-if="features.isHost" class="badgeInner host">
         <AppIcon name="award" :size="12" /> Host
@@ -151,64 +154,92 @@ function handleProfileClick() {
   top: 14px;
   left: 18px;
   right: auto;
-  z-index: 10;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 10px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px -2px rgba(30, 34, 64, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  user-select: none;
+  pointer-events: auto;
+  box-sizing: border-box;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sessionBrand:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -2px rgba(30, 34, 64, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.brandGroup {
   display: flex;
   align-items: center;
-  gap: 12px;
-  pointer-events: none;
-  user-select: none;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .logoMark {
   flex-shrink: 0;
-  filter: saturate(0.85);
-  opacity: 0.35;
+  display: block;
 }
 
 .brandWord {
-  font-weight: var(--fw-medium);
-  font-size: 1.1rem;
-  letter-spacing: 0.02em;
-  color: var(--color-mono30);
-  opacity: 0.35;
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+  color: var(--color-mono10, #1e2240);
+  line-height: 1;
+}
+
+.brandDivider {
+  width: 1px;
+  height: 14px;
+  background: rgba(148, 163, 184, 0.4);
+  flex-shrink: 0;
+  margin: 0 1px;
 }
 
 .headerRoleBadge {
   display: inline-flex;
   align-items: center;
-  pointer-events: auto;
+  flex-shrink: 0;
 }
 
 .badgeInner {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: 9999px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  backdrop-filter: blur(8px);
+  line-height: 1;
 }
 
 .badgeInner.host {
-  background: rgba(245, 158, 11, 0.18);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  color: #f59e0b;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(251, 191, 36, 0.22));
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #d97706;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.12);
 }
 
 .badgeInner.mod {
-  background: rgba(99, 102, 241, 0.18);
-  border: 1px solid rgba(99, 102, 241, 0.45);
-  color: #818cf8;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(139, 92, 246, 0.22));
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  color: #6366f1;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.12);
 }
 
 .badgeInner.attendee {
-  background: rgba(148, 163, 184, 0.15);
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   color: #64748b;
 }
 </style>
