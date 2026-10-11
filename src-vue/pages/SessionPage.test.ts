@@ -782,7 +782,7 @@ describe('SessionPage', () => {
     features.isVerifiedHost = false;
     features.isVerifiedModerator = true;
     await flushPromises();
-    expect(wrapper.find('.sessionRoleBadge .modBadge').exists()).toBe(true);
+    expect(wrapper.find('.headerRoleBadge .badgeInner.mod').exists()).toBe(true);
 
     wrapper.unmount();
   });

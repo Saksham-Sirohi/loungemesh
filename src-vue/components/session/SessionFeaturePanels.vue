@@ -36,6 +36,7 @@ const featureLabels: Record<FeatureKey, string> = {
   whiteboard: 'Board',
   poll: 'Polls',
   moderator: 'Moderator',
+  chat: 'Chat',
 };
 
 import { useLocalStore } from '@/stores/localStore';
@@ -227,6 +228,9 @@ const stageStatusLabel = computed(() => {
 });
 
 function displayName(uid: string): string {
+  if (uid === local.id) {
+    return conference.displayName || 'You';
+  }
   conference.usersEpoch;
   return (
     (conference.users[uid]?.user as { _displayName?: string } | undefined)?._displayName ?? uid
@@ -235,7 +239,21 @@ function displayName(uid: string): string {
 
 const participantIds = computed(() => {
   conference.usersEpoch;
-  return Object.keys(conference.users);
+  const ids = new Set<string>(Object.keys(conference.users));
+  if (local.id) ids.add(local.id);
+
+  return Array.from(ids).sort((a, b) => {
+    const roleWeight = (uid: string) => {
+      if (uid === features.hostId) return 0;
+      if (isModeratorUser(uid)) return 1;
+      if (uid === features.stageOccupantId) return 2;
+      return 3;
+    };
+    const wa = roleWeight(a);
+    const wb = roleWeight(b);
+    if (wa !== wb) return wa - wb;
+    return displayName(a).localeCompare(displayName(b));
+  });
 });
 
 onBeforeUnmount(disposeNotesPush);
@@ -429,12 +447,20 @@ const featureCardStyle = computed(() => {
         >
           <div class="participantHead">
             <div class="participantMeta">
-              <span class="name">{{ displayName(uid) }}</span>
-              <span v-if="uid === features.hostId" class="badge hostBadge">👑 Host</span>
-              <span v-else-if="isModeratorUser(uid)" class="badge modBadge">🛡️ Moderator</span>
-              <span v-else-if="uid === features.stageOccupantId" class="badge stageBadge">🎤 Presenter</span>
-              <span v-else-if="uid === features.invitedStageUserId" class="badge stageInvitedBadge">Invited</span>
-              <span v-else class="badge attendeeBadge">👤 Attendee</span>
+              <div class="avatarCircle">{{ displayName(uid).slice(0, 1).toUpperCase() }}</div>
+              <div class="nameAndRole">
+                <div class="nameRow">
+                  <span class="name">{{ displayName(uid) }}</span>
+                  <span v-if="uid === local.id" class="youTag">(You)</span>
+                </div>
+                <div class="roleRow">
+                  <span v-if="uid === features.hostId" class="badge hostBadge">👑 Host</span>
+                  <span v-else-if="isModeratorUser(uid)" class="badge modBadge">🛡️ Moderator</span>
+                  <span v-else-if="uid === features.stageOccupantId" class="badge stageBadge">🎤 Presenter</span>
+                  <span v-else-if="uid === features.invitedStageUserId" class="badge stageInvitedBadge">Invited</span>
+                  <span v-else class="badge attendeeBadge">👤 Attendee</span>
+                </div>
+              </div>
             </div>
             <div class="modActions">
               <button
@@ -511,11 +537,19 @@ const featureCardStyle = computed(() => {
         >
           <div class="participantHead">
             <div class="participantMeta">
-              <span class="name">{{ displayName(uid) }}</span>
-              <span v-if="uid === features.hostId" class="badge hostBadge">👑 Host</span>
-              <span v-else-if="isModeratorUser(uid)" class="badge modBadge">🛡️ Moderator</span>
-              <span v-else-if="uid === features.stageOccupantId" class="badge stageBadge">🎤 Presenter</span>
-              <span v-else class="badge attendeeBadge">👤 Attendee</span>
+              <div class="avatarCircle">{{ displayName(uid).slice(0, 1).toUpperCase() }}</div>
+              <div class="nameAndRole">
+                <div class="nameRow">
+                  <span class="name">{{ displayName(uid) }}</span>
+                  <span v-if="uid === local.id" class="youTag">(You)</span>
+                </div>
+                <div class="roleRow">
+                  <span v-if="uid === features.hostId" class="badge hostBadge">👑 Host</span>
+                  <span v-else-if="isModeratorUser(uid)" class="badge modBadge">🛡️ Moderator</span>
+                  <span v-else-if="uid === features.stageOccupantId" class="badge stageBadge">🎤 Presenter</span>
+                  <span v-else class="badge attendeeBadge">👤 Attendee</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -755,11 +789,54 @@ const featureCardStyle = computed(() => {
 .participantCard .grantTable {
   margin-top: 8px;
 }
+.participantHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .participantMeta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.avatarCircle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-blue10, #e0e7ff);
+  color: var(--color-blue100, #3730a3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.nameAndRole {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.youTag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-mono40, #64748b);
+  flex-shrink: 0;
+}
+.roleRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .participantCard.onStage {
   border-color: var(--color-blue100);
@@ -771,14 +848,11 @@ const featureCardStyle = computed(() => {
 .lobbyBlock {
   margin-top: 10px;
 }
-.lobbyRow,
-.participantHead {
+.lobbyRow {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-.lobbyRow {
   margin-top: 6px;
 }
 .participantCard {
@@ -792,13 +866,13 @@ const featureCardStyle = computed(() => {
   border-color: var(--color-blue100);
   background: var(--color-mono95);
 }
-.participantHead {
-  justify-content: space-between;
-}
 .name {
   font-weight: var(--fw-medium);
   font-size: var(--fs-small);
   color: var(--color-text-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .badge {
   font-size: var(--fs-small);

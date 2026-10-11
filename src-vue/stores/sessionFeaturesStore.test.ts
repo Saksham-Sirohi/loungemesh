@@ -162,6 +162,15 @@ describe('sessionFeaturesStore', () => {
     expect(features.isHost).toBe(false);
   });
 
+  it('preserves host on reconnect in resetHostForJoin', () => {
+    const features = useSessionFeaturesStore();
+    features.hostId = 'host-123';
+    features.pendingHostClaim = false;
+    features.resetHostForJoin({ isReconnect: true });
+    expect(features.hostId).toBe('host-123');
+    expect(features.pendingHostClaim).toBe(false);
+  });
+
   it('resets host state when leaving', () => {
     const features = useSessionFeaturesStore();
     features.setHost('host');
@@ -875,5 +884,91 @@ describe('sessionFeaturesStore', () => {
     expect(features.isInvited).toBe(false);
 
     vi.useRealTimers();
+  });
+
+  it('enables and disables features via setFeatureEnabled and applyConfigUpdate', async () => {
+    const features = useSessionFeaturesStore();
+    const local = useLocalStore();
+    const conference = useConferenceStore();
+    const engine = { sendCommand: vi.fn() };
+
+    features.panel = 'notes';
+    await features.setFeatureEnabled('notes', false, engine);
+    expect(features.enabledFeatures.notes).toBe(false);
+    expect(features.panel).toBe('');
+    expect(engine.sendCommand).toHaveBeenCalledWith('config', expect.stringContaining('"notes":false'));
+
+    // stage disabling clears stage occupant
+    local.setMyID('stager');
+    conference.addUser('stager');
+    features.stageOccupantId = 'stager';
+    expect(features.isStageModeActive).toBe(true);
+    await features.setFeatureEnabled('stage', false, engine);
+    expect(features.stageOccupantId).toBe('');
+
+    // applyConfigUpdate updates all fields and closes panels when disabled
+    features.panel = 'whiteboard';
+    features.applyConfigUpdate({
+      allowParticipantRecording: true,
+      lobbyEnabled: true,
+      stagePromotionEnabled: false,
+      enabledFeatures: {
+        whiteboard: false,
+        poll: false,
+        chat: false,
+      },
+    });
+    expect(features.allowParticipantRecording).toBe(true);
+    expect(features.lobbyEnabled).toBe(true);
+    expect(features.stagePromotionEnabled).toBe(false);
+    expect(features.enabledFeatures.whiteboard).toBe(false);
+    expect(features.panel).toBe('');
+
+    features.panel = 'poll';
+    features.applyConfigUpdate({ enabledFeatures: { poll: false } });
+    expect(features.panel).toBe('');
+
+    features.panel = 'chat';
+    features.applyConfigUpdate({ enabledFeatures: { chat: false } });
+    expect(features.panel).toBe('');
+
+    features.panel = 'notes';
+    features.applyConfigUpdate({ enabledFeatures: { notes: false } });
+    expect(features.panel).toBe('');
+
+    // setFeatureEnabled with enabled: true and no engine
+    await features.setFeatureEnabled('notes', true);
+    expect(features.enabledFeatures.notes).toBe(true);
+
+    // chat panel gating when chat is disabled
+    features.enabledFeatures.chat = false;
+    features.panel = '';
+    features.togglePanel('chat');
+    expect(features.panel).toBe('');
+
+    // isModerator check for host
+    local.setMyID('my-host-id');
+    features.setHost('my-host-id');
+    features.isVerifiedHost = false;
+    features.isVerifiedModerator = false;
+    expect(features.isModerator).toBe(true);
+
+    // feature getters when features are disabled room-wide
+    features.enabledFeatures = {
+      poll: false,
+      whiteboard: false,
+      notes: false,
+      stage: false,
+      chat: false,
+    };
+    expect(features.canUsePoll).toBe(false);
+    expect(features.canRequestPoll).toBe(false);
+    expect(features.canManagePoll).toBe(false);
+    expect(features.canAccessPoll).toBe(false);
+    expect(features.canClearWhiteboard).toBe(false);
+    expect(features.canUseWhiteboard).toBe(false);
+    expect(features.canUseNotes).toBe(false);
+    expect(features.canPromoteToStage).toBe(false);
+    expect(features.canUseChat).toBe(false);
   });
 });

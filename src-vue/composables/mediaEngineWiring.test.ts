@@ -810,6 +810,74 @@ describe('wireStoreSync', () => {
     jitsi.conference._fire(ev.conference.CONFERENCE_JOINED);
     expect(syncSpy).not.toHaveBeenCalled();
   });
+
+  it('runs periodic heartbeat hello and stale user pruning', async () => {
+    vi.useFakeTimers();
+    const engine = getMediaEngineInstance();
+    const conference = useConferenceStore();
+    const local = useLocalStore();
+    const jitsi = getJitsiTestContext();
+    const ev = jitsi.jsMeet.events;
+    const cmdSpy = vi.spyOn(engine, 'sendCommand');
+    const pruneSpy = vi.spyOn(conference, 'pruneStaleUsers');
+
+    wireStoreSync(engine);
+    await engine.connect();
+    jitsi.connection._fire(ev.connection.CONNECTION_ESTABLISHED);
+    await engine.joinRoom('room', 'Alice', {});
+    local.setMyID('local_alice');
+    local.userKey = 'uk_alice';
+    local.pos = { x: 100, y: 100 };
+    jitsi.conference._fire(ev.conference.CONFERENCE_JOINED);
+    // Re-fire to test existing heartbeat timer replacement
+    jitsi.conference._fire(ev.conference.CONFERENCE_JOINED);
+
+    cmdSpy.mockClear();
+    vi.advanceTimersByTime(5000);
+
+    expect(cmdSpy).toHaveBeenCalledWith(
+      'hello',
+      expect.stringContaining('"id":"local-1"'),
+    );
+    expect(pruneSpy).toHaveBeenCalledWith(45000);
+
+    // test tick when isJoined is false
+    const joinedSpy = vi.spyOn(engine, 'isJoined').mockReturnValue(false);
+    vi.advanceTimersByTime(5000);
+    joinedSpy.mockRestore();
+
+    // test tick when myId is empty
+    local.setMyID('');
+    const idSpy = vi.spyOn(engine, 'getLocalUserId').mockReturnValue('');
+    vi.advanceTimersByTime(5000);
+    idSpy.mockRestore();
+    local.setMyID('local-1');
+
+    // connectionFailed clears active timer
+    jitsi.connection._fire(ev.connection.CONNECTION_FAILED);
+    cmdSpy.mockClear();
+    vi.advanceTimersByTime(5000);
+    expect(cmdSpy).not.toHaveBeenCalled();
+
+    // second connectionFailed when timer is already cleared
+    jitsi.connection._fire(ev.connection.CONNECTION_FAILED, 'network_error');
+
+    // Rejoin to restart timer
+    const reIdSpy = vi.spyOn(engine, 'getLocalUserId').mockReturnValue('local-1');
+    jitsi.conference._fire(ev.conference.CONFERENCE_JOINED);
+    reIdSpy.mockRestore();
+
+    // Disconnection clears timer
+    jitsi.connection._fire(ev.connection.CONNECTION_DISCONNECTED);
+    cmdSpy.mockClear();
+    vi.advanceTimersByTime(5000);
+    expect(cmdSpy).not.toHaveBeenCalled();
+
+    // second disconnected when timer is already cleared
+    jitsi.connection._fire(ev.connection.CONNECTION_DISCONNECTED);
+
+    vi.useRealTimers();
+  });
 });
 
 

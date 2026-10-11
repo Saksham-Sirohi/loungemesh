@@ -20,6 +20,11 @@ import {
   mergeGrants,
   type AccessCommandPayload,
 } from '@/utils/sessionAccess';
+import {
+  featureAccess,
+  DEFAULT_ENABLED_FEATURES,
+  type GatedFeatureKey,
+} from '@/utils/featureAccess';
 import { mergePolls } from '@/utils/sessionPoll';
 
 import type { NotesCommand } from '@/utils/notesSync';
@@ -128,6 +133,8 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
     eventyayRole: '' as string,
     capabilities: [] as string[],
     pendingModerationChanges: [] as ModerationChange[],
+    enabledFeatures: { ...DEFAULT_ENABLED_FEATURES } as Record<GatedFeatureKey, boolean>,
+    roleSnapshotToken: '' as string,
   }),
   getters: {
     canModerate(): boolean {
@@ -188,35 +195,52 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
       );
     },
     canUseNotes(): boolean {
+      if (this.enabledFeatures.notes === false) return false;
+      if (this.isHost || this.isModerator) return true;
       if (this.eventyayMeet && this.capabilities.length > 0) {
         return this.capabilities.includes('notes');
       }
       return this.localGrants.notes;
     },
     canUseWhiteboard(): boolean {
+      if (this.enabledFeatures.whiteboard === false) return false;
+      if (this.isHost || this.isModerator) return true;
       if (this.eventyayMeet && this.capabilities.length > 0) {
         return this.capabilities.includes('whiteboard');
       }
       return this.localGrants.whiteboard;
     },
     canUsePoll(): boolean {
+      if (this.enabledFeatures.poll === false) return false;
+      if (this.isHost || this.isModerator) return true;
       if (this.eventyayMeet && this.capabilities.length > 0) {
         return this.capabilities.includes('poll_manage');
       }
       return this.localGrants.poll;
     },
+    canUseChat(): boolean {
+      if (this.enabledFeatures.chat === false) return false;
+      if (this.isHost || this.isModerator) return true;
+      return this.localGrants.chat;
+    },
     canRequestPoll(): boolean {
+      if (this.enabledFeatures.poll === false) return false;
       if (this.isHost || this.isModerator) return false;
       return this.canUsePoll || this.eventyayMeet;
     },
     canManagePoll(): boolean {
+      if (this.enabledFeatures.poll === false) return false;
       if (this.isHost || this.isModerator) return true;
-      if (this.eventyayMeet && (this.capabilities.includes('poll_manage') || this.capabilities.includes('moderate'))) {
+      if (
+        this.eventyayMeet &&
+        (this.capabilities.includes('poll_manage') || this.capabilities.includes('moderate'))
+      ) {
         return true;
       }
       return false;
     },
     canAccessPoll(): boolean {
+      if (this.enabledFeatures.poll === false) return false;
       return this.canUsePoll || this.isHost || this.isModerator || this.eventyayMeet;
     },
     myPendingPollRequest(): PollRequest | undefined {
@@ -226,10 +250,11 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
       );
     },
     canPromoteToStage(): boolean {
-      if (this.eventyayMeet) {
-        return this.capabilities.includes('moderate') && this.stagePromotionEnabled;
+      if (this.enabledFeatures.stage === false || !this.stagePromotionEnabled) return false;
+      if (this.eventyayMeet && this.capabilities.length > 0) {
+        return this.capabilities.includes('moderate');
       }
-      return this.isHost && this.stagePromotionEnabled;
+      return this.isHost;
     },
     isStageModeActive(): boolean {
       const conference = useConferenceStore();
@@ -246,6 +271,7 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
       return local.onStage;
     },
     canClearWhiteboard(): boolean {
+      if (this.enabledFeatures.whiteboard === false) return false;
       if (this.eventyayMeet && this.capabilities.length > 0) {
         return this.capabilities.includes('moderate');
       }
@@ -582,9 +608,10 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
       this.pollSeenSeq = this.pollActivitySeq;
     },
     togglePanel(name: typeof this.panel) {
-      if (name === 'notes' && !this.canUseNotes && !this.isHost && !this.isModerator) return;
-      if (name === 'whiteboard' && !this.canUseWhiteboard && !this.isHost && !this.isModerator) return;
+      if (name === 'notes' && !this.canUseNotes) return;
+      if (name === 'whiteboard' && !this.canUseWhiteboard) return;
       if (name === 'poll' && !this.canAccessPoll) return;
+      if (name === 'chat' && !this.canUseChat) return;
       if (name === 'moderator' && !this.isHost && !this.isModerator) return;
       const opening = this.panel !== name;
       this.panel = opening ? name : '';
@@ -592,7 +619,55 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
       if (opening && name === 'whiteboard') this.markWhiteboardSeen();
       if (opening && name === 'poll') this.markPollSeen();
     },
-    resetHostForJoin() {
+    async setFeatureEnabled(feature: GatedFeatureKey, enabled: boolean, engine?: any) {
+      this.enabledFeatures = { ...this.enabledFeatures, [feature]: enabled };
+      if (!enabled) {
+        if (this.panel === feature) this.panel = '';
+        if (feature === 'stage' && this.isStageModeActive) {
+          this.stageOccupantId = '';
+        }
+      }
+      /* v8 ignore start */
+      const roomName = window.location.pathname.split('/').pop();
+      if (roomName) {
+        fetch(`/api/meetings/state/${roomName}/access/defaults`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabledFeatures: this.enabledFeatures }),
+        }).catch((err) => console.error('Failed to update enabled features:', err));
+      }
+      /* v8 ignore stop */
+      if (engine) {
+        engine.sendCommand('config', JSON.stringify({ enabledFeatures: this.enabledFeatures }));
+      }
+    },
+    applyConfigUpdate(data: {
+      allowParticipantRecording?: boolean;
+      lobbyEnabled?: boolean;
+      stagePromotionEnabled?: boolean;
+      enabledFeatures?: Partial<Record<GatedFeatureKey, boolean>>;
+    }) {
+      if (data.allowParticipantRecording !== undefined) {
+        this.allowParticipantRecording = data.allowParticipantRecording;
+      }
+      if (data.lobbyEnabled !== undefined) {
+        this.lobbyEnabled = data.lobbyEnabled;
+      }
+      if (data.stagePromotionEnabled !== undefined) {
+        this.stagePromotionEnabled = data.stagePromotionEnabled;
+      }
+      if (data.enabledFeatures) {
+        this.enabledFeatures = { ...this.enabledFeatures, ...data.enabledFeatures };
+        if (this.panel === 'notes' && !this.canUseNotes) this.panel = '';
+        if (this.panel === 'whiteboard' && !this.canUseWhiteboard) this.panel = '';
+        if (this.panel === 'poll' && !this.canAccessPoll) this.panel = '';
+        if (this.panel === 'chat' && !this.canUseChat) this.panel = '';
+      }
+    },
+    resetHostForJoin(options?: { isReconnect?: boolean }) {
+      if (options?.isReconnect) {
+        return;
+      }
       this.hostId = '';
       this.pendingHostClaim = true;
       this.isFetchingConfig = false;
@@ -743,6 +818,7 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
               this.allowParticipantRecording = parsed.allowParticipantRecording ?? false;
               if (parsed.roomDefaults) {
                 this.roomDefaults = {
+                  chat: parsed.roomDefaults.chat ?? true,
                   notes: parsed.roomDefaults.notes ?? false,
                   whiteboard: parsed.roomDefaults.whiteboard ?? false,
                   poll: parsed.roomDefaults.poll ?? false,
@@ -817,6 +893,9 @@ export const useSessionFeaturesStore = defineStore('sessionFeatures', {
           const accessData = await accessRes.json();
           if (accessData.defaults) this.roomDefaults = accessData.defaults;
           if (accessData.grants) this.userGrants = accessData.grants;
+          if (accessData.enabledFeatures) {
+            this.enabledFeatures = { ...DEFAULT_ENABLED_FEATURES, ...accessData.enabledFeatures };
+          }
         }
         if (pollRes.ok) {
           const pollData = await pollRes.json();

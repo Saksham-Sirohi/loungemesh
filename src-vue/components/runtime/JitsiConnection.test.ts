@@ -11,6 +11,7 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useLocalStore } from '@/stores/localStore';
 import { useMediaEngine } from '@/composables/useMediaEngine';
 import { useAuthStore } from '@/stores/authStore';
+import { useReconnectStore } from '@/stores/reconnectStore';
 import { SESSION_ERROR_CODES } from '@/services/sessionErrorCodes';
 import JitsiConnection from './JitsiConnection.vue';
 
@@ -332,5 +333,20 @@ describe('JitsiConnection', () => {
     const conference = useConferenceStore();
     expect(conference.displayName).toBe("John Doe's Sphere");
     wrapper.unmount();
+  });
+
+  it('registers reconnect retry action, allows execution, and cleans up on unmount', async () => {
+    const { wrapper, pinia } = await mountWithApp(JitsiConnection, {
+      route: '/session/room-retry',
+      global: { stubs: { JitsiConnection: false, LocalStoreLogic: true } },
+    });
+    await flushPromises();
+    const reconnect = useReconnectStore(pinia);
+    expect(reconnect.isIntentionalLeave).toBe(false);
+    expect(typeof (reconnect as any)._retryAction).toBe('function');
+    await (reconnect as any)._retryAction?.();
+    wrapper.unmount();
+    expect(reconnect.isIntentionalLeave).toBe(true);
+    expect((reconnect as any)._retryAction).toBeUndefined();
   });
 });
