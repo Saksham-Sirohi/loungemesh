@@ -17,7 +17,7 @@ This guide documents the comprehensive user flows and feature architectures impl
 3. `useAccessGuard` calls `POST /api/v1/loungemesh/token/` with the opaque token.
 4. Eventyay returns a signed Jitsi JWT and user capability grants (`moderate`, `notes`, `whiteboard`, `poll_manage`).
 5. JWT is stored in `sessionStorage` and user is routed to `/session/<roomName>`.
-6. If the token is invalid or expired, the user is redirected to `/denied`.
+6. If the token is invalid or expired, the user is presented with the access denied state directly on the join page.
 
 ### Room PIN Security Flow
 1. If the host configured a **Join PIN** in room settings:

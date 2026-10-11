@@ -90,7 +90,7 @@ Configured in `src-vue/services/JitsiAdapter.ts`:
   - Stream buffer: `smacks_max_unacked_stanzas = 25`
   - Always verify configuration generation via `wait_for_prosody_config` before patching.
 - **Nginx (`nginx/default.conf.template`)**:
-  - `set_real_ip_from 0.0.0.0/0; real_ip_header X-Forwarded-For;`
+  - `set_real_ip_from <trusted_proxy_cidr>; real_ip_header X-Forwarded-For;` (deployments must configure their actual trusted proxy CIDRs; never use `0.0.0.0/0` in production).
   - Rate limiting: `50r/s burst=100`.
 - **Database (`env.example`)**:
   - `DATABASE_URL` pool config: `connection_limit=20&pool_timeout=15`.
