@@ -77,6 +77,17 @@ function markdownToHtml(md: string): string {
     .replace(/\n/g, '<br />');
 }
 
+// Helper: Sanitize meeting configuration to prevent exposing joinPin or internal fields
+function sanitizeMeetingConfig(configs: any) {
+  if (!configs) return null;
+  return {
+    lobbyEnabled: !!configs.lobbyEnabled,
+    stagePromotionEnabled: configs.stagePromotionEnabled !== undefined ? configs.stagePromotionEnabled : true,
+    allowParticipantRecording: !!configs.allowParticipantRecording,
+    notesTemplate: configs.notesTemplate || '',
+  };
+}
+
 // Helper: Sync Event to Google Calendar (Create or Update)
 async function syncGoogleCalendarEvent(
   userId: string,
@@ -278,7 +289,7 @@ export async function createMeeting(req: Request, res: Response) {
     // Cache meeting configuration in Redis
     if (meeting.configs) {
       const cacheKey = `meeting:config:${roomName}`;
-      await redisClient.set(cacheKey, JSON.stringify(meeting.configs));
+      await redisClient.set(cacheKey, JSON.stringify(sanitizeMeetingConfig(meeting.configs)));
     }
 
     return res.status(201).json(meeting);
@@ -603,7 +614,7 @@ export async function getMeetingConfig(req: Request, res: Response) {
     // Check Redis config cache
     const cached = await redisClient.get(cacheKey);
     if (cached) {
-      return res.json(JSON.parse(cached));
+      return res.json(sanitizeMeetingConfig(JSON.parse(cached)));
     }
 
     const meeting = (await prisma.meeting.findUnique({
@@ -615,10 +626,12 @@ export async function getMeetingConfig(req: Request, res: Response) {
       return res.status(404).json({ error: 'Config not found' });
     }
 
-    // Cache in Redis
-    await redisClient.set(cacheKey, JSON.stringify(meeting.configs));
+    const publicConfig = sanitizeMeetingConfig(meeting.configs);
 
-    return res.json(meeting.configs);
+    // Cache in Redis
+    await redisClient.set(cacheKey, JSON.stringify(publicConfig));
+
+    return res.json(publicConfig);
   } catch (err) {
     console.error('Get meeting config error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -669,10 +682,11 @@ export async function updateMeetingConfig(req: Request, res: Response) {
     });
 
     // Sync Redis cache
+    const publicConfig = sanitizeMeetingConfig(updatedConfig);
     const cacheKey = `meeting:config:${roomName}`;
-    await redisClient.set(cacheKey, JSON.stringify(updatedConfig));
+    await redisClient.set(cacheKey, JSON.stringify(publicConfig));
 
-    return res.json(updatedConfig);
+    return res.json(publicConfig);
   } catch (err) {
     console.error('Update config error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -1202,7 +1216,7 @@ export async function getRoomInitialState(req: Request, res: Response) {
       }
     }
 
-    const config = meeting?.configs || null;
+    const config = sanitizeMeetingConfig(meeting?.configs);
     const strokes = rawWb ? JSON.parse(rawWb) : [];
     let notes = rawNotes;
     if (notes === null) {
