@@ -344,6 +344,10 @@ patch_prosody_limits() {
       }
     }
   ' "$prosody_conf" "$jitsi_conf"
+  if docker compose ps --status running prosody 2>/dev/null | grep -q prosody; then
+    docker compose exec -T prosody prosodyctl reload 2>/dev/null || \
+      docker compose restart prosody
+  fi
 }
 
 check_ws() {
@@ -562,6 +566,7 @@ cmd_deploy() {
   regenerate_jvb_if_needed "$mode"
   regenerate_web_if_needed
   ensure_jitsi_dirs
+  patch_prosody_limits
 
   echo "==> Pulling latest Jitsi images"
   docker compose pull

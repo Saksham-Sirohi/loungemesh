@@ -14,15 +14,15 @@ describe('buildReceiverConstraints', () => {
     ).toBeNull();
   });
 
-  it('subscribes to initial remotes when none are visible yet', () => {
+  it('returns empty selectedSources and zero lastN when none are visible yet', () => {
     const constraints = buildReceiverConstraints({
       localId: 'me',
       remoteUserIds: ['a', 'b'],
       visibleUserIds: [],
       stageIds: [],
     });
-    expect(constraints?.selectedSources).toEqual(expect.arrayContaining(['a-v0', 'b-v0']));
-    expect(constraints?.lastN).toBeGreaterThanOrEqual(1);
+    expect(constraints?.selectedSources).toEqual([]);
+    expect(constraints?.lastN).toBe(0);
   });
 
   it('only subscribes to visible and on-stage users, excluding off-screen remotes', () => {
@@ -61,14 +61,14 @@ describe('buildReceiverConstraints', () => {
     expect(constraints?.constraints['b-v0']).toEqual({ maxHeight: 720 });
   });
 
-  it('never sets lastN to zero when remotes exist', () => {
+  it('sets lastN to zero when no remotes are on screen or stage', () => {
     const constraints = buildReceiverConstraints({
       localId: 'me',
       remoteUserIds: ['peer'],
       visibleUserIds: [],
       stageIds: [],
     });
-    expect(constraints?.lastN).toBe(1);
+    expect(constraints?.lastN).toBe(0);
   });
 
   describe('channelLastN fallback', () => {

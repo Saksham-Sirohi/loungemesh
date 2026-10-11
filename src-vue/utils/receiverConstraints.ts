@@ -13,18 +13,14 @@ export function buildReceiverConstraints(opts: {
 
   const visible = [...new Set(opts.visibleUserIds)].filter((id) => id && id !== opts.localId);
   const stage = [...new Set(opts.stageIds)].filter((id) => id && id !== opts.localId);
-  let selectedEndpoints = [...new Set([...visible, ...stage])];
-
-  if (!selectedEndpoints.length) {
-    selectedEndpoints = remoteUserIds.slice(0, 4);
-  }
+  const selectedEndpoints = [...new Set([...visible, ...stage])];
   const selectedSources = selectedEndpoints.map((id) => `${id}-v0`);
 
   const channelLastN =
     typeof conferenceOptions.channelLastN === 'number' && conferenceOptions.channelLastN > 0
       ? conferenceOptions.channelLastN
       : 20;
-  const lastN = Math.max(1, Math.min(selectedEndpoints.length, channelLastN));
+  const lastN = Math.min(selectedEndpoints.length, channelLastN);
 
   const onStageSources = stage.map((id) => `${id}-v0`);
 
