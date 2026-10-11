@@ -61,7 +61,7 @@ export function useSessionPollControls() {
       question: pollQuestion.value.trim(),
       options: opts,
       requesterId: pollResultsSenderId(local.id, engine.getLocalUserId()),
-      requesterName: conference.users[local.id]?.user?._displayName || local.name || 'Participant',
+      requesterName: conference.displayName || 'Participant',
       createdAt: Date.now(),
     };
     features.addPollRequest(req);
