@@ -1,34 +1,55 @@
 ---
 name: loungemesh-features-and-testing
 description: >-
-  User flows, feature implementations, and 100% test coverage standards for LoungeMesh, covering
-  Vitest component/store tests, JitsiAdapter mocking, and Playwright E2E flows.
+  Complete guide to LoungeMesh user flows (entry, devices, spatial audio, stage, whiteboard, notes,
+  polls, moderation, calendar, resilience) and 100% test coverage standards with Vitest and Playwright.
 ---
 
 # LoungeMesh Features & Testing Skill
 
-This skill outlines user flows and testing best practices for LoungeMesh, focusing on the strict **100% test coverage requirement**.
+This skill documents all critical user flows in LoungeMesh and outlines testing standards to maintain the mandatory **100% test coverage** requirement.
 
 ---
 
-## 1. Feature User Flows
+## 1. Critical User Flows Checklist
 
-### 1. Room Joining & Entry
-1. User lands on `/` or `/session/<roomName>`.
-2. `useAccessGuard` checks for an Eventyay token or direct room access.
-3. If PIN protection is active, user enters PIN.
-4. `sessionFeaturesStore.fetchRoomConfigAndRole` loads `/api/meetings/state/:roomName/init`.
-5. `useMediaEngine.connect()` joins the Jitsi room, binds tracks, and starts the proximity audio loop.
+When developing or modifying features, verify that the following user flows function correctly:
 
-### 2. Spatial Interaction
-- Dragging avatar or pressing arrow/WASD updates coordinates `(x, y)` in `localStore`.
-- Coordinates broadcast via the XMPP/bridge data channel.
-- Remote avatars update positions; Web Worker re-computes volume attenuation.
-
-### 3. Stage & Presentation
-- Host promotes participant to stage via `sessionStage.ts`.
-- `isOnStage` becomes true; constraints escalate to 720p.
-- Screensharing captured at 720p @ 15–30 fps via `JitsiAdapter.createLocalTracks({ devices: ['desktop'], ... })`.
+1. **Room Entry & Access Control**:
+   - Direct Join: Name input & avatar selection.
+   - Eventyay Gated Entry: Opaque token exchange, Jitsi JWT generation, capability assignment.
+   - PIN Protection: Modal challenge, verification against backend, rejection on invalid PIN without leaking `joinPin`.
+   - Lobby & Admission: `localLobbyPending` knock state, host approval, transition to canvas.
+   - Host Key Claim: Unlocking host privileges with host key.
+2. **Media Device Negotiation**:
+   - Mic/Camera permission granting or graceful denial.
+   - Device selector modal (audio input, video input, audio output).
+   - Speaking level indicator (Web Audio analyser lighting up avatar ring).
+3. **2D Spatial Canvas & Proximity Audio**:
+   - Avatar movement via mouse drag and keyboard arrow/WASD keys.
+   - Canvas pan and zoom.
+   - Off-thread distance calculation (`proximityAudio.worker.ts`).
+   - Exponential volume attenuation via Web Audio `GainNode`s.
+4. **Stage Presentation & Screensharing**:
+   - Stage promotion & demotion by host.
+   - Stage occupants spotlighted with 720p receiver video constraint (`STAGE_MAX_HEIGHT = 720`).
+   - Screensharing with system audio captured at 720p @ 15–30 fps.
+5. **In-Room Collaborative Tools**:
+   - Collaborative Whiteboard: Freehand pen, lines, rectangles, circles, eraser, palette, stroke sync, clear/reset.
+   - Shared Notes: Real-time debounced markdown editing, host template broadcasting, markdown export.
+   - Live Polling: Create poll, anonymous voting, real-time vote tally, reveal/close.
+6. **Moderation & Room Administration**:
+   - Host room settings modal: Feature toggles (chat, notes, whiteboard, poll, stage).
+   - Moderator assistance: Poll management, stage promotion.
+   - Mute attendee & kick attendee (redirected to `/kicked`).
+   - Custom floorplan wallpaper update via URL or upload.
+7. **Scheduling & Calendar Sync**:
+   - Meeting schedule modal with recurrence rules and email invites.
+   - Google Calendar two-way synchronization via AES-256 encrypted OAuth.
+8. **Network Resilience & Recovery**:
+   - Automatic WebRTC reconnection on network drop.
+   - Automatic token renewal on `AUTHENTICATION_REQUIRED`.
+   - Graceful fallback from single-roundtrip `/init` to parallel individual endpoints.
 
 ---
 
@@ -44,13 +65,19 @@ coverage: {
 }
 ```
 
-### Critical Rules
-- Any new component, store method, composable, or utility in `src-vue/` **MUST** include comprehensive unit tests.
-- Always run `npm test` before concluding any task.
-- When writing tests that involve Pinia stores, always initialize:
-  ```ts
-  beforeEach(() => {
-    setActivePinia(createPinia());
-  });
-  ```
-- When writing tests that involve `useMediaEngine` or `JitsiAdapter`, use the test harness helpers in `src-vue/tests/` (e.g., `connectAndJoinTestConference()`, `getJitsiTestContext()`).
+### Testing Rules
+1. **Always run `npm test`** before committing any frontend change.
+2. **Mocking Pinia Stores**:
+   ```ts
+   beforeEach(() => {
+     setActivePinia(createPinia());
+   });
+   ```
+3. **Mocking WebRTC & Adapter**:
+   - Use test helpers in `src-vue/tests/`: `connectAndJoinTestConference()`, `getJitsiTestContext()`, `makeTrack()`.
+   - Spy on `getMediaEngineInstance()` for track and constraint calls.
+4. **Mocking Environment Variables**:
+   - Use `vi.stubEnv('VITE_EVENTYAY_API_BASE', ...)` and `vi.unstubAllEnvs()` in `afterEach`.
+5. **Vue Component Testing**:
+   - Use `@vue/test-utils` with `mountWithApp()`.
+   - Flush promises (`await flushPromises()`) after triggering reactive store actions or DOM events.
