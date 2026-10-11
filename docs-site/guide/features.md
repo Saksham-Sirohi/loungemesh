@@ -1,89 +1,141 @@
 # Features & User Flows
 
-This guide details the core features and user workflows available in LoungeMesh.
+This guide documents the comprehensive user flows and feature architectures implemented in LoungeMesh.
 
 ---
 
-## 1. Spatial Lounge & Proximity Audio
+## 1. Room Entry & Access Control Flows
 
-LoungeMesh replaces traditional grid-based video tiles with an interactive 2D spatial canvas:
+### Direct Join Flow
+1. User navigates to `/` or directly to `/session/<roomName>`.
+2. If no name or avatar is saved in `localStorage`, the user is presented with the **Name Input & Avatar Picker**.
+3. Once submitted, the user enters the spatial room and joins the WebRTC conference.
 
-- **Free Movement**: Participants navigate their avatar using mouse dragging or keyboard arrow/WASD keys.
-- **Proximity Audio Attenuation**: Sound volume dynamically fades as avatars move further apart. When two groups cluster in opposite corners of the lounge, they hear each other at whisper levels or silence, mimicking real-world mingling.
-- **Off-Thread Audio Math**: Distance calculations are performed in a dedicated Web Worker (`proximityAudio.worker.ts`) and applied to Web Audio API `GainNode` audio instances with smooth exponential ramps to eliminate clipping.
-- **Canvas Pan & Zoom**: Users can pan across the floorplan and zoom in/out with the mouse wheel or touch gestures to view the entire room.
+### Eventyay Gated Entry Flow
+1. Ticket holder clicks "Enter Lounge" on an Eventyay event page.
+2. The `eventyay-loungemesh` plugin issues an opaque token (2-hour TTL) and redirects to `/join/<roomName>?token=<opaqueToken>&event=<slug>&room=<slug>`.
+3. `useAccessGuard` calls `POST /api/v1/loungemesh/token/` with the opaque token.
+4. Eventyay returns a signed Jitsi JWT and user capability grants (`moderate`, `notes`, `whiteboard`, `poll_manage`).
+5. JWT is stored in `sessionStorage` and user is routed to `/session/<roomName>`.
+6. If the token is invalid or expired, the user is redirected to `/denied`.
 
----
+### Room PIN Security Flow
+1. If the host configured a **Join PIN** in room settings:
+2. Entering participants receive a PIN prompt modal before WebRTC tracks are published.
+3. The server validates the PIN without exposing it in public room config payloads.
+4. Correct PIN entry unlocks media connection; incorrect attempts display immediate error feedback.
 
-## 2. Roles & Permission Control
+### Lobby & Waiting Room Flow
+1. When `lobbyEnabled` is active:
+2. Non-host, unauthenticated participants entering the room enter a "Waiting in Lobby" state (`localLobbyPending = true`).
+3. Active hosts receive an incoming knock notification with the guest's name.
+4. Hosts can approve or deny admission.
+5. On approval, the guest is transitioned onto the live 2D lounge canvas.
 
-LoungeMesh features a hierarchical role system:
-
-### Role Tiers
-- **Host**: Complete control over room settings, feature gating, lobby admissions, stage management, and whiteboard resets.
-- **Moderator**: Can manage polls, promote participants to stage, and assist in moderation.
-- **Attendee**: General participant with capabilities governed by host-defined room defaults.
-
-### Host Claiming & Room PIN Protection
-- Rooms can be secured with a **Join PIN**.
-- Guests entering a PIN-protected room are prompted to enter the PIN before WebRTC media initialization occurs.
-- Hosts can claim ownership using a host key or Eventyay authentication token.
-
-### Feature Access Matrix
-Hosts can dynamically enable or disable features for the entire room or grant per-user overrides:
-- **Chat** (text messaging)
-- **Whiteboard** (drawing & collaboration)
-- **Shared Notes** (markdown document)
-- **Live Polls** (voting)
-- **Stage Mode** (presentation)
-
----
-
-## 3. Interactive Collaborative Whiteboard
-
-The built-in whiteboard provides a real-time collaborative workspace:
-
-- **Vector Canvas**: High-precision vector stroke rendering supporting freehand pen, lines, rectangles, and circles.
-- **Color & Size Palettes**: Curated color swatches and configurable stroke widths.
-- **Real-Time Synchronization**: Strokes are broadcast over the bridge data channel and cached in Redis/PostgreSQL for instant recovery by new arrivals.
-- **Pan & Zoom Navigation**: Dedicated pan controls to navigate expansive diagrams without losing drawing focus.
+### Host Key Claim Flow
+1. In un-moderated rooms without an Eventyay token, any user possessing the secret host key can claim host ownership.
+2. The user opens the Moderator panel and inputs the host key.
+3. `sessionFeaturesStore` verifies credentials, updates `isVerifiedHost = true`, and unlocks room management controls.
 
 ---
 
-## 4. Collaborative Shared Notes
+## 2. Media Devices & Audio Setup Flows
 
-A shared markdown document for live meeting minutes:
+### Permission & Device Negotiation
+1. Upon joining, `JitsiAdapter` requests mic and camera permissions.
+2. If denied, media tracks are disabled gracefully and visual warnings are shown without crashing the room.
+3. Users can open the **Device Settings Modal** at any time to select specific microphone, camera, or speaker output devices.
 
-- **Live Synchronization**: Edit notes collaboratively with automatic debounced synchronization.
-- **Templates**: Hosts can define pre-configured meeting agendas or templates (`notesTemplate`) that load automatically on room start.
-- **Export & Markdown Support**: Download notes as standard Markdown for archiving.
-
----
-
-## 5. Live Interactive Polling
-
-Engage attendees with instant polls:
-
-- **Single & Multi-Choice Questions**: Create questions with customized response choices.
-- **Anonymous Voting**: Attendees cast votes with live count aggregation.
-- **Results Visibility**: Hosts can reveal results in real-time or hold until voting completes.
+### Speaking Level & Audio Indicator
+- The audio engine measures input speaking volume using `Web Audio API` analysers.
+- A glowing speaking ring illuminates around the avatar circle whenever the user speaks, providing immediate visual feedback across the room.
 
 ---
 
-## 6. Stage Mode & Screensharing
+## 3. Spatial Navigation & Proximity Audio Flow
 
-For keynotes and presentations, participants can be promoted to the virtual stage:
+### 2D Floorplan Navigation
+- **Avatar Movement**: Move your avatar by dragging with the mouse/touchscreen or using keyboard arrow keys (`ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `W`, `A`, `S`, `D`).
+- **Canvas Panning & Zooming**: Click and drag the canvas background to pan across large floorplans; use the mouse wheel or pinch-to-zoom to adjust zoom scale.
 
-- **Stage Spotlight**: Avatars on stage appear prominently in the viewport with elevated video resolution (720p).
-- **High-Definition Screenshare**: Share entire screens, individual application windows, or browser tabs at 720p with system audio pass-through.
-- **Stage Promotion**: Hosts can invite attendees onto the stage or return them to the general floor.
+### Proximity Audio Attenuation
+- Avatars nearby hear each other at full volume (0 dB).
+- As avatars move further apart, volume attenuates exponentially according to inverse-distance curves calculated off-thread in `src-vue/workers/proximityAudio.worker.ts`.
+- Far-away clusters hear only ambient whispers or complete silence, allowing multiple conversations to occur simultaneously in a single virtual room.
 
 ---
 
-## 7. Event Scheduling & Google Calendar Integration
+## 4. Stage Presentation & Screensharing Flow
 
-Schedule meetings in advance with automatic calendar syncing:
+### Requesting & Stepping on Stage
+1. Any participant can request stage access or be invited by the host.
+2. When on stage, `isOnStage` becomes active:
+   - Avatar is highlighted with a gold stage badge.
+   - Video track subscription constraint escalates from 360p to **720p** (`STAGE_MAX_HEIGHT = 720`).
+   - The stage occupant's audio broadcasts room-wide without distance attenuation.
 
-- **Recurring Schedules**: Daily, weekly, monthly, or custom recurrence patterns.
-- **Guest Invitations**: Email invites with automatic invitation links and role assignment.
-- **Google Calendar Sync**: Two-way integration via Google OAuth with AES-256-GCM encrypted token storage.
+### High-Definition Screensharing
+1. The presenter clicks the **Screenshare Button**.
+2. Browser prompt allows selecting entire screen, application window, or browser tab.
+3. Stream is captured at **720p @ 15–30 fps** with optional system audio sharing.
+4. Screenshare renders in a dedicated high-visibility viewport for all participants.
+
+---
+
+## 5. In-Room Collaborative Tools Flow
+
+### Collaborative Whiteboard
+1. Click the **Whiteboard Icon** in the sidebar.
+2. Select pen, line, rectangle, circle, or eraser tools.
+3. Pick stroke colors and stroke widths from the palette.
+4. All vector strokes are transmitted over the bridge data channel in real-time and cached in Redis.
+5. Hosts can clear the whiteboard for everyone; participants can export drawings as PNG.
+
+### Shared Collaborative Notes
+1. Open the **Notes Panel**.
+2. Type live notes with markdown formatting support.
+3. Changes synchronize collaboratively with debounced transmission.
+4. Hosts can load pre-configured meeting agendas or templates (`notesTemplate`).
+5. Notes can be downloaded as `.md` files at any time.
+
+### Live Polling & Voting
+1. Hosts/moderators click **Create Poll** and specify a question with multiple options.
+2. A notification alerts all participants, opening the poll panel.
+3. Participants cast anonymous votes.
+4. Real-time tally updates live; hosts can reveal or close the poll.
+
+---
+
+## 6. Room Administration & Moderation Flow
+
+### Host Room Settings
+Hosts can open the **Room Settings Modal** to configure:
+- Feature toggles: enable/disable Chat, Whiteboard, Notes, Polls, or Stage.
+- Lobby enable/disable.
+- Stage promotion permissions.
+- Notes template default text.
+- Custom floorplan background wallpaper (image upload or URL).
+
+### Moderation Actions
+- **Mute User**: Mute disruptive participants remotely.
+- **Kick User**: Eject a participant from the room; the kicked user is routed to `/kicked`.
+
+---
+
+## 7. Meeting Scheduling & Calendar Flow
+
+1. From the home screen, click **Schedule Meeting**.
+2. Input meeting title, description, date/time, and recurrence rules (Daily, Weekly, Monthly).
+3. Add participant email addresses for automatic calendar invites.
+4. If connected to Google Calendar, the meeting synchronizes two-way with AES-256 encrypted OAuth credentials.
+
+---
+
+## 8. Resilience & Reconnection Flow
+
+### Network Drop Recovery
+- If the WebRTC peer connection drops, `useMediaEngine` initiates an exponential backoff reconnection cycle.
+- On JVB bridge failover, the conference rejoins without losing the user's avatar coordinates on the 2D floorplan.
+
+### Token Expiry Auto-Renewal
+- When a ticketed JWT expires (`AUTHENTICATION_REQUIRED`), `JitsiAdapter` triggers the token refresh hook, obtaining a renewed JWT from Eventyay without requiring a full browser reload.
